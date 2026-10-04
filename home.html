@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ozara — Home</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+        <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+        <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+      </svg>
+    </div>
+    <div>
+      <p class="brand-name">Ozara</p>
+      <p class="brand-sub">Automated fabric sanitization</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-dot" id="connDot" title="Database connection"></span>
+    <span class="user-email" id="userEmail"></span>
+    <button class="logout-btn" id="logoutBtn">Sign out</button>
+  </div>
+</header>
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="Main navigation">
+    <a class="nav-btn active" href="home.html" aria-current="page">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="nav-btn" href="monitor.html">
+      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+      <span>Monitor</span>
+    </a>
+    <a class="nav-btn" href="history.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>History</span>
+    </a>
+    <a class="nav-btn" href="profile.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      <span>Profile</span>
+    </a>
+  </nav>
+
+  <main class="app-main">
+    <section class="status-banner" id="statusBanner">
+      <div class="status-banner-top">
+        <div>
+          <p class="status-banner-title" id="statusTitle">Checking status…</p>
+          <p class="status-banner-sub" id="statusSub">Waiting for device data</p>
+        </div>
+        <span class="status-banner-icon" id="statusIcon" aria-hidden="true"></span>
+      </div>
+      <div class="status-banner-row">
+        <span id="statusRowLabel">Cycle start</span>
+        <span class="status-pill" id="statusPill">—</span>
+      </div>
+    </section>
+
+    <section class="card door-card" id="doorCard">
+      <span class="door-icon" id="doorIcon" aria-hidden="true"></span>
+      <div>
+        <p class="door-title" id="doorTitle">No door sensor yet</p>
+        <p class="door-sub" id="doorSub">This device doesn't report door status yet.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="card-title" style="margin-bottom:14px;">System status</p>
+      <div class="status-grid">
+        <div class="status-item">
+          <p class="status-item-label">ESP32</p>
+          <p class="status-item-value" id="statusEsp32">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">Firebase</p>
+          <p class="status-item-value" id="statusFirebase">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">MQ-136</p>
+          <p class="status-item-value" id="statusMq136">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">BME680</p>
+          <p class="status-item-value" id="statusBme680">—</p>
+        </div>
+      </div>
+    </section>
+
+    <button class="set-timer-btn" id="setTimerBtn" disabled>Set timer — disabled</button>
+
+    <section class="card timer-card" id="timerCard" hidden>
+      <p class="card-title">Cycle timer</p>
+      <p class="timer-hint">Pick how long the cycle should run.</p>
+
+      <div class="mode-toggle" role="tablist" aria-label="Timer mode">
+        <button type="button" class="mode-btn" id="modeSuggested" role="tab" aria-selected="false">Suggested time</button>
+        <button type="button" class="mode-btn" id="modeManual" role="tab" aria-selected="false">Manual setup</button>
+      </div>
+
+      <div class="timer-panel" id="suggestedPanel" hidden>
+        <div class="preset-list" id="presetList"></div>
+      </div>
+
+      <div class="timer-panel" id="manualPanel" hidden>
+        <div class="manual-row">
+          <label class="manual-field">
+            <span>Hours</span>
+            <input type="number" id="manualHours" min="0" max="2" step="1" value="0" inputmode="numeric">
+          </label>
+          <label class="manual-field">
+            <span>Minutes</span>
+            <input type="number" id="manualMinutes" min="0" max="59" step="1" value="30" inputmode="numeric">
+          </label>
+        </div>
+        <p class="timer-error" id="manualError" hidden></p>
+      </div>
+
+      <div class="timer-summary" id="timerSummary" hidden>
+        <span id="timerSummaryText">—</span>
+      </div>
+    </section>
+
+    <button class="start-cycle-btn" id="startCycleBtn" disabled hidden>Start cycle</button>
+    <p class="lcd-note" id="lcdNote" hidden></p>
+
+  </main>
+
+</div>
+
+<p class="version">Ozara v1.0 · ESP32 IoT</p>
+
+<script type="module" src="js/home.js"></script>
+
+</body>
+</html>

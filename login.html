@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ozara — Sign in</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+
+<div class="stage">
+
+  <div class="brand">
+    <svg class="molecule" viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <circle cx="90" cy="120" r="2.5" fill="#5ee6c4" opacity="0.6"/>
+      <circle cx="150" cy="90" r="2" fill="#5ee6c4" opacity="0.4"/>
+      <circle cx="200" cy="150" r="3" fill="#5ee6c4" opacity="0.5"/>
+      <circle cx="260" cy="100" r="2" fill="#5ee6c4" opacity="0.35"/>
+      <circle cx="120" cy="200" r="2.5" fill="#5ee6c4" opacity="0.3"/>
+      <circle cx="320" cy="180" r="2" fill="#5ee6c4" opacity="0.4"/>
+      <line x1="90" y1="120" x2="150" y2="90" stroke="#2f8f79" stroke-width="1" opacity="0.5"/>
+      <line x1="150" y1="90" x2="200" y2="150" stroke="#2f8f79" stroke-width="1" opacity="0.4"/>
+      <line x1="200" y1="150" x2="260" y2="100" stroke="#2f8f79" stroke-width="1" opacity="0.3"/>
+      <line x1="120" y1="200" x2="200" y2="150" stroke="#2f8f79" stroke-width="1" opacity="0.3"/>
+      <line x1="260" y1="100" x2="320" y2="180" stroke="#2f8f79" stroke-width="1" opacity="0.25"/>
+      <circle cx="80" cy="400" r="2" fill="#5ee6c4" opacity="0.3"/>
+      <circle cx="140" cy="440" r="2.5" fill="#5ee6c4" opacity="0.4"/>
+      <circle cx="60" cy="460" r="1.8" fill="#5ee6c4" opacity="0.25"/>
+      <line x1="80" y1="400" x2="140" y2="440" stroke="#2f8f79" stroke-width="1" opacity="0.3"/>
+      <line x1="60" y1="460" x2="80" y2="400" stroke="#2f8f79" stroke-width="1" opacity="0.2"/>
+    </svg>
+    <div class="brand-top">
+      <p class="wordmark">OZARA</p>
+      <p class="tagline">Fabric freshness, monitored in real time.</p>
+    </div>
+    <div class="brand-bottom">
+      <span class="status-dot"></span>&nbsp; <b>Device link:</b> ready to pair after sign in.<br>
+      Ozone output, humidity, and gas readings sync straight from your ESP32 unit.
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+        <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+        <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+      </svg>
+    </div>
+    <p class="hero-name">Ozara</p>
+    <p class="hero-tag">Automated fabric sanitization</p>
+  </header>
+
+  <div class="panel">
+    <h1 id="formTitle">Sign in</h1>
+    <p class="sub" id="formSub">Access your Ozara dashboard.</p>
+
+    <div class="error" id="formError" role="alert"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8">
+          <button type="button" class="eye" id="togglePw" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg>
+          </button>
+        </div>
+        <p class="pw-hint" id="pwHint" hidden>At least 8 characters, with uppercase, lowercase, a number, and a symbol.</p>
+      </div>
+      <div class="field" id="confirmField" hidden>
+        <label for="confirmPassword">Confirm password</label>
+        <div class="pw-wrap">
+          <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password">
+          <button type="button" class="eye" id="toggleConfirmPw" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="row-between">
+        <label class="remember"><input type="checkbox" id="remember"> Keep me signed in</label>
+        <a href="#" class="link" id="forgotLink">Forgot password?</a>
+      </div>
+      <button type="submit" class="submit" id="submitBtn">Sign in</button>
+    </form>
+
+    <div class="divider">or</div>
+    <button type="button" class="google-btn" id="googleBtn">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.95v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.95A9 9 0 0 0 0 9c0 1.45.35 2.83.95 4.03z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .95 4.97l3 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+    <p class="footnote"><span id="switchPrompt">No account yet?</span> <a href="#" class="link" id="switchLink">Create an account</a></p>
+  </div>
+</div>
+
+<script type="module" src="js/auth.js"></script>
+</body>
+</html>

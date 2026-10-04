@@ -1,0 +1,45 @@
+{
+  "rules": {
+    // Only signed-in users can read or write anything by default.
+    ".read": false,
+    ".write": false,
+
+    "devices": {
+      "$deviceId": {
+        // Any signed-in user can read live sensor data (ozone, humidity, gas).
+        // Tighten this later (e.g. per-user device ownership) once you have
+        // multiple accounts/devices to separate.
+        ".read": "auth != null",
+
+        // Web app sends commands (start cycle + chosen timer) here; ESP32 reads them.
+        "commands": {
+          ".write": "auth != null"
+        },
+
+        // Captured reading summaries saved when a check or purge run finishes.
+        "history": {
+          ".write": "auth != null"
+        },
+
+        "readings": {
+          // The ESP32 writes here. If it authenticates with a Firebase
+          // service account / database secret, this stays "auth != null".
+          // If it writes unauthenticated, you'll need a different approach
+          // (e.g. a Cloud Function endpoint instead of direct DB writes).
+          ".write": "auth != null",
+          "$readingId": {
+            ".validate": "newData.hasChildren(['ozone_ppm', 'humidity', 'temperature', 'timestamp'])"
+          }
+        }
+      }
+    },
+
+    "users": {
+      "$uid": {
+        // Users can only read/write their own profile node.
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}
