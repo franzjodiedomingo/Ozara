@@ -3,6 +3,8 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "database.rules.json",
+      "firmware/**",
       "**/.*",
       "**/node_modules/**",
       "functions/**"

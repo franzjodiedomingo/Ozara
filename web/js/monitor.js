@@ -6,7 +6,7 @@
 import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
 import { ref, query, limitToLast, onValue, set, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-import { TEST_SAMPLE_DATA, LS_HISTORY, OZONE_SAFE_LIMIT_PPM, numberRuns, summaryHtml, formatNumber } from "./summary.js";
+import { TEST_SAMPLE_DATA, LS_HISTORY, LS_SESSIONS, OZONE_SAFE_LIMIT_PPM, numberRuns, summaryHtml, formatNumber } from "./summary.js";
 
 const DEVICE_ID = "device1";
 const CHART_POINTS = 60;
@@ -17,7 +17,6 @@ const CHECK_DURATION_SEC = 600; // the check stops after 10 minutes (lower it to
 // When true: fake readings (one every 2s) while a session runs, and
 // sessions/history are kept in localStorage instead of Firebase.
 const SAMPLE_INTERVAL_MS = 2000;
-const LS_SESSIONS = "ozara_test_sessions";
 
 const PHASES = ["check", "purge"];
 const COPY = {

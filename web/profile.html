@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ozara — History</title>
+<title>Ozara — Profile</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,38 +40,35 @@
       <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
       <span>Home</span>
     </a>
+    <a class="nav-btn" href="live.html">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      <span>Live</span>
+    </a>
     <a class="nav-btn" href="monitor.html">
       <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
       <span>Monitor</span>
     </a>
-    <a class="nav-btn active" href="history.html" aria-current="page">
+    <a class="nav-btn" href="history.html">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
       <span>History</span>
     </a>
-    <a class="nav-btn" href="profile.html">
+    <a class="nav-btn active" href="profile.html" aria-current="page">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
       <span>Profile</span>
     </a>
   </nav>
 
   <main class="app-main">
-    <section class="card">
-      <div class="card-header">
-        <p class="card-title">Test history</p>
-        <span class="last-updated" id="historyCount">—</span>
-      </div>
-      <div class="run-list" id="historyList">
-        <p class="log-empty">Loading…</p>
-      </div>
+    <section class="card placeholder-card">
+      <p class="card-title">Profile</p>
+      <p class="log-empty" id="profilePlaceholder">Account settings will show up here once it's built.</p>
     </section>
 
   </main>
 
 </div>
 
-<p class="version">Ozara v1.0 · ESP32 IoT</p>
-
-<script type="module" src="js/history.js"></script>
+<script type="module" src="js/profile.js"></script>
 
 </body>
 </html>

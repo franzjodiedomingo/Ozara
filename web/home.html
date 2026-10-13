@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ozara — Home</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+        <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+        <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+      </svg>
+    </div>
+    <div>
+      <p class="brand-name">Ozara</p>
+      <p class="brand-sub">Automated fabric sanitization</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-dot" id="connDot" title="Database connection"></span>
+    <span class="user-email" id="userEmail"></span>
+    <button class="logout-btn" id="logoutBtn">Sign out</button>
+  </div>
+</header>
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="Main navigation">
+    <a class="nav-btn active" href="home.html" aria-current="page">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="nav-btn" href="live.html">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      <span>Live</span>
+    </a>
+    <a class="nav-btn" href="monitor.html">
+      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+      <span>Monitor</span>
+    </a>
+    <a class="nav-btn" href="history.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>History</span>
+    </a>
+    <a class="nav-btn" href="profile.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      <span>Profile</span>
+    </a>
+  </nav>
+
+  <main class="app-main">
+    <section class="status-banner" id="statusBanner">
+      <div class="status-banner-top">
+        <div>
+          <p class="status-banner-title" id="statusTitle">Checking status…</p>
+          <p class="status-banner-sub" id="statusSub">Waiting for device data</p>
+        </div>
+        <span class="status-banner-icon" id="statusIcon" aria-hidden="true"></span>
+      </div>
+      <div class="status-banner-row">
+        <span id="statusRowLabel">Cycle start</span>
+        <span class="status-pill" id="statusPill">—</span>
+      </div>
+    </section>
+
+    <section class="card door-card" id="doorCard">
+      <span class="door-icon" id="doorIcon" aria-hidden="true"></span>
+      <div>
+        <p class="door-title" id="doorTitle">No door sensor yet</p>
+        <p class="door-sub" id="doorSub">This device doesn't report door status yet.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="card-title" style="margin-bottom:14px;">System status</p>
+      <div class="status-grid">
+        <div class="status-item">
+          <p class="status-item-label">ESP32</p>
+          <p class="status-item-value" id="statusEsp32">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">Firebase</p>
+          <p class="status-item-value" id="statusFirebase">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">MQ-136</p>
+          <p class="status-item-value" id="statusMq136">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">MQ-137</p>
+          <p class="status-item-value" id="statusMq137">—</p>
+        </div>
+        <div class="status-item">
+          <p class="status-item-label">BME680</p>
+          <p class="status-item-value" id="statusBme680">—</p>
+        </div>
+      </div>
+    </section>
+
+    <button class="start-cycle-btn" id="setTimerBtn" disabled>Set timer — disabled</button>
+    <p class="lcd-note" id="lcdNote" hidden></p>
+
+    <!-- Step 1: choose how to set the duration -->
+    <section class="card timer-panel" id="timerChoicePanel" hidden>
+      <div class="card-header">
+        <p class="card-title">Choose cycle duration</p>
+        <button class="link-btn link-btn-muted" id="cancelFromChoiceBtn">Cancel</button>
+      </div>
+      <p class="timer-sub">How long should this sanitization cycle run?</p>
+      <div class="timer-choice-row">
+        <button class="timer-choice-btn" id="chooseSuggestedBtn">
+          <span class="timer-choice-title">Suggested time</span>
+          <span class="timer-choice-sub">Recommended durations from Ozara</span>
+        </button>
+        <button class="timer-choice-btn" id="chooseManualBtn">
+          <span class="timer-choice-title">Manual setup</span>
+          <span class="timer-choice-sub">Set your own duration</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 2a: suggested-time table -->
+    <section class="card timer-panel" id="suggestedPanel" hidden>
+      <div class="card-header">
+        <p class="card-title">Suggested time</p>
+        <div class="header-actions">
+          <button class="link-btn" id="backFromSuggestedBtn">Back</button>
+          <button class="link-btn link-btn-muted" id="cancelFromSuggestedBtn">Cancel</button>
+        </div>
+      </div>
+      <div class="suggested-table" id="suggestedTable">
+        <button class="suggested-row" data-minutes="10">
+          <span>
+            <span class="suggested-name">Quick refresh</span>
+            <span class="suggested-desc">Light odor, everyday wear</span>
+          </span>
+          <span class="suggested-time">10 min</span>
+        </button>
+        <button class="suggested-row" data-minutes="20">
+          <span>
+            <span class="suggested-name">Standard cycle</span>
+            <span class="suggested-desc">Typical gym or outdoor use</span>
+          </span>
+          <span class="suggested-time">20 min</span>
+        </button>
+        <button class="suggested-row" data-minutes="35">
+          <span>
+            <span class="suggested-name">Deep sanitize</span>
+            <span class="suggested-desc">Heavy odor or damp fabric</span>
+          </span>
+          <span class="suggested-time">35 min</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 2b: manual setup -->
+    <section class="card timer-panel" id="manualPanel" hidden>
+      <div class="card-header">
+        <p class="card-title">Manual setup</p>
+        <div class="header-actions">
+          <button class="link-btn" id="backFromManualBtn">Back</button>
+          <button class="link-btn link-btn-muted" id="cancelFromManualBtn">Cancel</button>
+        </div>
+      </div>
+      <label for="manualMinutes" class="timer-sub" style="display:block; margin-bottom:8px;">Duration (minutes)</label>
+      <div class="manual-row">
+        <input type="number" id="manualMinutes" min="1" max="120" step="1" placeholder="e.g. 15">
+        <button class="submit-small" id="confirmManualBtn">Confirm</button>
+      </div>
+    </section>
+
+    <!-- Step 3: ready to start -->
+    <section class="card timer-panel" id="readyPanel" hidden>
+      <div class="card-header">
+        <p class="card-title">Timer set</p>
+        <div class="header-actions">
+          <button class="link-btn" id="changeTimerBtn">Change</button>
+          <button class="link-btn link-btn-muted" id="cancelFromReadyBtn">Cancel</button>
+        </div>
+      </div>
+      <p class="duration-display"><span id="chosenMinutes">—</span> <span class="duration-unit">minutes</span></p>
+      <button class="start-cycle-btn" id="startCycleBtn">Start cycle</button>
+    </section>
+
+    <!-- Step 4: cycle actively running -->
+    <section class="card timer-panel running-panel" id="runningPanel" hidden>
+      <p class="card-title" style="margin-bottom:4px;">Cycle running</p>
+      <p class="timer-sub" id="runningSub">Sanitization in progress…</p>
+      <p class="duration-display"><span id="runningMinutesLeft">—</span> <span class="duration-unit">minutes left</span></p>
+      <button class="cancel-cycle-btn" id="cancelRunningBtn">Cancel cycle</button>
+    </section>
+
+  </main>
+
+</div>
+
+<p class="version">Ozara v1.0 · ESP32 IoT</p>
+
+<script type="module" src="js/home.js"></script>
+
+</body>
+</html>

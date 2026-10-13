@@ -209,7 +209,7 @@ function friendlyError(code) {
     case "auth/email-already-in-use":
       return "That email already has an account. Try signing in instead.";
     case "auth/weak-password":
-      return "Password is too weak. Use at least 6 characters.";
+      return "Password is too weak. Use at least 8 characters with upper and lower case letters, a number, and a symbol.";
     case "auth/too-many-requests":
       return "Too many attempts. Try again in a bit.";
     case "auth/popup-closed-by-user":

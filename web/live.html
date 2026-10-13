@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ozara — Live</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+        <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+        <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+      </svg>
+    </div>
+    <div>
+      <p class="brand-name">Ozara</p>
+      <p class="brand-sub">Automated fabric sanitization</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-dot" id="connDot" title="Database connection"></span>
+    <span class="user-email" id="userEmail"></span>
+    <button class="logout-btn" id="logoutBtn">Sign out</button>
+  </div>
+</header>
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="Main navigation">
+    <a class="nav-btn" href="home.html">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="nav-btn active" href="live.html" aria-current="page">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      <span>Live</span>
+    </a>
+    <a class="nav-btn" href="monitor.html">
+      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+      <span>Monitor</span>
+    </a>
+    <a class="nav-btn" href="history.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>History</span>
+    </a>
+    <a class="nav-btn" href="profile.html">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      <span>Profile</span>
+    </a>
+  </nav>
+
+  <main class="app-main">
+    <section class="status-banner unknown" id="liveBanner">
+      <div class="status-banner-top">
+        <div>
+          <p class="status-banner-title" id="liveTitle">Checking device…</p>
+          <p class="status-banner-sub" id="liveSub">Waiting for the unit to report in.</p>
+        </div>
+        <span class="status-banner-icon" id="liveIcon" aria-hidden="true">•</span>
+      </div>
+      <div class="status-banner-row">
+        <span>Unit connection</span>
+        <span class="status-pill" id="livePill">Checking</span>
+      </div>
+    </section>
+
+    <div class="reading-row">
+      <section class="card reading-card">
+        <p class="reading-label">BME680 gas resistance</p>
+        <p class="reading-value"><span id="bmeValue">—</span><span class="reading-unit">kΩ</span></p>
+        <p class="reading-status">Not an ozone reading</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">MQ-136</p>
+        <p class="reading-value"><span id="mq136Value">—</span><span class="reading-unit">ADC</span></p>
+        <p class="reading-status">Raw value, not ppm</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">MQ-137</p>
+        <p class="reading-value"><span id="mq137Value">—</span><span class="reading-unit">ADC</span></p>
+        <p class="reading-status">Raw value, not ppm</p>
+      </section>
+    </div>
+
+    <div class="reading-row">
+      <section class="card reading-card">
+        <p class="reading-label">Temperature</p>
+        <p class="reading-value"><span id="tempValue">—</span><span class="reading-unit">°C</span></p>
+        <p class="reading-status">Inside chamber</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">Humidity</p>
+        <p class="reading-value"><span id="humValue">—</span><span class="reading-unit">%</span></p>
+        <p class="reading-status">Inside chamber</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">Ozone generator</p>
+        <p class="reading-value"><span id="genValue">—</span></p>
+        <p class="reading-status" id="outputsStatus">Commanded outputs, not measured</p>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <p class="card-title">Recent readings</p>
+        <div class="chart-legend">
+          <span class="legend-item"><i class="dot dot-ozone"></i>MQ-136</span>
+          <span class="legend-item"><i class="dot dot-temp"></i>MQ-137</span>
+          <span class="legend-item"><i class="dot dot-humidity"></i>BME680 (kΩ)</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="liveChart"></canvas>
+        <p class="log-empty" id="chartEmpty">No readings yet.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <p class="card-title">Reading log</p>
+        <span class="last-updated" id="lastUpdated">No data yet</span>
+      </div>
+      <div class="log-list" id="logList">
+        <p class="log-empty">No readings yet.</p>
+      </div>
+    </section>
+
+  </main>
+
+</div>
+
+<p class="version">Ozara v1.0 · ESP32 IoT</p>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  // Fallback if the first CDN is blocked or fails to load.
+  if (typeof Chart === "undefined") {
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"><\/script>');
+  }
+</script>
+<script type="module" src="js/live.js"></script>
+
+</body>
+</html>

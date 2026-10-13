@@ -1,0 +1,64 @@
+{
+  "rules": {
+    // Only signed-in users can read or write anything by default.
+    ".read": false,
+    ".write": false,
+
+    "devices": {
+      "$deviceId": {
+        // Any signed-in user can read live sensor data.
+        // Tighten this later (e.g. per-user device ownership) once you have
+        // multiple accounts/devices to separate.
+        ".read": "auth != null",
+
+        // The ESP32 signs in with its own Firebase Auth account (email below).
+        // Only that account may write live data, so website users can't fake it.
+        // If you change the email in firmware/firebase_sync.h, change it here too.
+        "live": {
+          ".write": "auth != null && auth.token.email === 'device1@ozara.local'"
+        },
+
+        "status": {
+          // esp32Ready, climateReady, gasCalibrated (MQ-136), mq137Calibrated (MQ-137),
+          // cycleRunning, cycleRemainingSeconds, phase, lastSeen.
+          // The Home page on the dashboard only reads this.
+          ".write": "auth != null && auth.token.email === 'device1@ozara.local'"
+        },
+
+        "readings": {
+          // One child per reading, pushed by the ESP32 every ~10 s.
+          // This hardware has no ozone ppm sensor, so ozone_ppm is not required.
+          ".write": "auth != null && auth.token.email === 'device1@ozara.local'",
+          "$readingId": {
+            ".validate": "newData.hasChildren(['timestamp', 'temperature', 'humidity'])"
+          }
+        },
+
+        "commands": {
+          // The dashboard writes here (e.g. "Start cycle", "Cancel cycle").
+          // The current firmware does not listen to this path yet.
+          ".write": "auth != null"
+        },
+
+        "history": {
+          // Finished check/purge summaries saved by the Monitor page
+          // (push ids, one per run). Read is covered by devices/$deviceId.
+          ".write": "auth != null"
+        },
+
+        "cycles": {
+          // Optional finished test results grouped under each cycle.
+          ".write": "auth != null"
+        }
+      }
+    },
+
+    "users": {
+      "$uid": {
+        // Users can only read/write their own profile node.
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}
