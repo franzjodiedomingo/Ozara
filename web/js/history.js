@@ -45,25 +45,19 @@ requireAuth().then(() => {
     emptyEl.hidden = false;
   };
 
-  // Finished runs from the Monitor page
-  if (TEST_SAMPLE_DATA) {
-    loadLocalRuns();
-    window.addEventListener("storage", (e) => { if (e.key === LS_HISTORY) loadLocalRuns(); });
-    connDot.style.background = "var(--dot-ok)";
-  } else {
-    onValue(
-      query(ref(db, `devices/${DEVICE_ID}/history`), limitToLast(200)),
-      (snapshot) => {
-        connDot.style.background = "var(--dot-ok)";
-        const list = [];
-        snapshot.forEach((child) => { list.push(child.val()); }); // braces matter: returning truthy stops forEach
-        runs = list;
-        runsLoaded = true;
-        render();
-      },
-      onErr
-    );
-  }
+  // Finished runs from Firebase
+  onValue(
+    query(ref(db, `devices/${DEVICE_ID}/history`), limitToLast(200)),
+    (snapshot) => {
+      connDot.style.background = "var(--dot-ok)";
+      const list = [];
+      snapshot.forEach((child) => { list.push(child.val()); });
+      runs = list;
+      runsLoaded = true;
+      render();
+    },
+    onErr
+  );
 
   // Optional device-written cycles
   onValue(

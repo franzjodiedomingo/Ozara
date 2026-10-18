@@ -5,7 +5,6 @@
 import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
 import { ref, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-import { TEST_SAMPLE_DATA, LS_SESSIONS } from "./summary.js";
 import { createPresence } from "./presence.js";
 
 // The unit's cycle is driven by its own buttons (baseline, load clothes, timer,
@@ -276,16 +275,6 @@ els.startCycleBtn.addEventListener("click", async () => {
   els.startCycleBtn.disabled = true;
   els.startCycleBtn.textContent = "Starting…";
   try {
-    if (TEST_SAMPLE_DATA) {
-      // Test mode: Monitor reads its sessions from localStorage, so start the
-      // purge session there and jump to the Purging monitor tab.
-      let sessions = {};
-      try { sessions = JSON.parse(localStorage.getItem(LS_SESSIONS)) || {}; } catch { sessions = {}; }
-      sessions.purge = { startedAt: Date.now(), durationSec: selectedMinutes * 60 };
-      localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions));
-      window.location.href = "monitor.html?tab=purge";
-      return;
-    }
     // durationMinutes is what the ESP32 reads; durationSeconds is what the
     // Monitor page reads to build its purge session window.
     await set(ref(db, `devices/${DEVICE_ID}/commands/startCycle`), {
@@ -293,10 +282,7 @@ els.startCycleBtn.addEventListener("click", async () => {
       durationSeconds: selectedMinutes * 60,
       requestedAt: serverTimestamp()
     });
-    // The device/status listener will flip to the "running" panel once
-    // the ESP32 confirms by writing status.cycleRunning = true. If it
-    // doesn't confirm, the flow simply stays on this screen so the
-    // person can retry rather than looking like nothing happened.
+    window.location.href = "monitor.html";
   } catch (err) {
     console.error(err);
   } finally {

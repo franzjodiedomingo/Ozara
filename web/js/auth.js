@@ -27,6 +27,7 @@ const rememberBox = document.getElementById("remember");
 const forgotLink = document.getElementById("forgotLink");
 const googleBtn = document.getElementById("googleBtn");
 const submitBtn = document.getElementById("submitBtn");
+const submitBtnText = document.getElementById("submitBtnText");
 const switchLink = document.getElementById("switchLink");
 const switchPrompt = document.getElementById("switchPrompt");
 const formTitle = document.getElementById("formTitle");
@@ -49,6 +50,14 @@ function clearMessage() {
 function setBusy(busy) {
   submitBtn.disabled = busy;
   googleBtn.disabled = busy;
+  if (submitBtnText) {
+    if (busy) {
+      submitBtnText.dataset.origText = submitBtnText.textContent;
+      submitBtnText.textContent = mode === "signup" ? "Creating account..." : "Signing in...";
+    } else if (submitBtnText.dataset.origText) {
+      submitBtnText.textContent = submitBtnText.dataset.origText;
+    }
+  }
 }
 
 // Runs an auth action. By default goes to the dashboard after; pass
@@ -69,12 +78,18 @@ async function run(action, { redirect = true } = {}) {
 function setMode(next) {
   mode = next;
   const signup = mode === "signup";
-  formTitle.textContent = signup ? "Create account" : "Sign in";
-  formSub.textContent = signup ? "Set up your Ozara login." : "Access your Ozara dashboard.";
-  submitBtn.textContent = signup ? "Create account" : "Sign in";
-  switchPrompt.textContent = signup ? "Already have an account?" : "No account yet?";
-  switchLink.textContent = signup ? "Sign in" : "Create an account";
-  forgotLink.hidden = signup;
+  formTitle.textContent = signup ? "Create account" : "Welcome back!";
+  formSub.textContent = signup ? "Sign up for your Ozara account" : "Sign in to your Ozara account";
+  
+  if (submitBtnText) {
+    submitBtnText.textContent = signup ? "Create account" : "Sign in";
+  } else {
+    submitBtn.textContent = signup ? "Create account" : "Sign in";
+  }
+  
+  switchPrompt.textContent = signup ? "Already have an account?" : "Don't have an account?";
+  switchLink.textContent = signup ? "Sign in" : "Create one";
+  forgotLink.style.display = signup ? "none" : "";
   passwordInput.autocomplete = signup ? "new-password" : "current-password";
   confirmField.hidden = !signup;
   confirmInput.required = signup;
@@ -180,13 +195,15 @@ togglePw.addEventListener("click", () => {
   togglePw.setAttribute("aria-label", show ? "Hide password" : "Show password");
 });
 
-toggleConfirmPw.addEventListener("click", () => {
-  const show = confirmInput.type === "password";
-  confirmInput.type = show ? "text" : "password";
-  toggleConfirmPw.classList.toggle("on", show);
-  toggleConfirmPw.setAttribute("aria-pressed", String(show));
-  toggleConfirmPw.setAttribute("aria-label", show ? "Hide password" : "Show password");
-});
+if (toggleConfirmPw) {
+  toggleConfirmPw.addEventListener("click", () => {
+    const show = confirmInput.type === "password";
+    confirmInput.type = show ? "text" : "password";
+    toggleConfirmPw.classList.toggle("on", show);
+    toggleConfirmPw.setAttribute("aria-pressed", String(show));
+    toggleConfirmPw.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  });
+}
 
 // Standard password policy: 8+ chars, upper, lower, number, symbol.
 function checkPasswordStrength(password) {

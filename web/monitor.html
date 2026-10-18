@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ozara — Monitor</title>
+<title>Ozara — Live Monitor</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,13 +40,9 @@
       <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
       <span>Home</span>
     </a>
-    <a class="nav-btn" href="live.html">
-      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
-      <span>Live</span>
-    </a>
     <a class="nav-btn active" href="monitor.html" aria-current="page">
-      <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
-      <span>Monitor</span>
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      <span>Live Monitor</span>
     </a>
     <a class="nav-btn" href="history.html">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
@@ -59,63 +55,94 @@
   </nav>
 
   <main class="app-main">
-    <div class="mode-toggle monitor-tabs" role="tablist" aria-label="Monitor views">
-      <button type="button" class="mode-btn" id="tabCheck" role="tab" aria-selected="true">Checking status</button>
-      <button type="button" class="mode-btn" id="tabPurge" role="tab" aria-selected="false">Purging monitor</button>
-    </div>
 
+    <!-- Device Connection & Phase Status Banner -->
+    <section class="status-banner unknown" id="liveBanner">
+      <div class="status-banner-top">
+        <div>
+          <p class="status-banner-title" id="liveTitle">Checking device…</p>
+          <p class="status-banner-sub" id="liveSub">Waiting for the unit to report in.</p>
+        </div>
+        <span class="status-banner-icon" id="liveIcon" aria-hidden="true">•</span>
+      </div>
+      <div class="status-banner-row">
+        <span>Unit connection</span>
+        <span class="status-pill" id="livePill">Checking</span>
+      </div>
+    </section>
+
+    <!-- Cycle & Cabinet Air Check Control -->
     <section class="card session-card">
       <div class="session-top">
         <div>
-          <p class="card-title" id="sessionTitle">Check cabinet air</p>
-          <p class="session-sub" id="sessionSub">—</p>
+          <p class="card-title" id="sessionTitle">Cabinet status</p>
+          <p class="session-sub" id="sessionSub">Waiting for real-time telemetry from unit.</p>
         </div>
-        <span class="session-badge" id="sessionBadge">Not started</span>
+        <span class="session-badge" id="sessionBadge">Idle</span>
       </div>
       <div class="progress" id="sessionProgress" hidden><i id="sessionProgressBar"></i></div>
-      <button class="start-cycle-btn" id="startCheckBtn" type="button">Start check</button>
-      <a class="session-link" id="goHomeLink" href="home.html" hidden>Go to Home to set the timer and start a cycle</a>
-      <button class="reset-test-btn" id="resetTestBtn" type="button" hidden>Clear test data</button>
+      <button class="start-cycle-btn" id="startCheckBtn" type="button">Start cabinet air check</button>
+      <a class="session-link" id="goHomeLink" href="home.html">Go to Home to set the timer and start a cycle</a>
     </section>
 
+    <!-- Live Sensor Readings (Row 1: Gas & Resistance) -->
     <div class="reading-row">
       <section class="card reading-card">
-        <p class="reading-label">Ozone output</p>
-        <p class="reading-value"><span id="ozoneValue">—</span><span class="reading-unit">ppm</span></p>
-        <p class="reading-status" id="ozoneStatus">Not started</p>
+        <p class="reading-label">MQ-136 Gas Sensor</p>
+        <p class="reading-value"><span id="mq136Value">—</span><span class="reading-unit">ADC</span></p>
+        <p class="reading-status">Ozone & sulfur detection</p>
       </section>
-
       <section class="card reading-card">
-        <p class="reading-label">Humidity</p>
-        <p class="reading-value"><span id="humidityValue">—</span><span class="reading-unit">%</span></p>
-        <p class="reading-status">Inside chamber</p>
+        <p class="reading-label">MQ-137 Gas Sensor</p>
+        <p class="reading-value"><span id="mq137Value">—</span><span class="reading-unit">ADC</span></p>
+        <p class="reading-status">Ammonia & fabric odor</p>
       </section>
-
       <section class="card reading-card">
-        <p class="reading-label">Temperature</p>
-        <p class="reading-value"><span id="temperatureValue">—</span><span class="reading-unit">°C</span></p>
-        <p class="reading-status">Inside chamber</p>
+        <p class="reading-label">BME680 Gas Resistance</p>
+        <p class="reading-value"><span id="bmeValue">—</span><span class="reading-unit">kΩ</span></p>
+        <p class="reading-status">Air VOC & purity indicator</p>
       </section>
     </div>
 
+    <!-- Live Sensor Readings (Row 2: Climate & Chamber Actuators) -->
+    <div class="reading-row">
+      <section class="card reading-card">
+        <p class="reading-label">Temperature</p>
+        <p class="reading-value"><span id="tempValue">—</span><span class="reading-unit">°C</span></p>
+        <p class="reading-status">Inside chamber</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">Humidity</p>
+        <p class="reading-value"><span id="humValue">—</span><span class="reading-unit">%</span></p>
+        <p class="reading-status">Inside chamber</p>
+      </section>
+      <section class="card reading-card">
+        <p class="reading-label">Ozone Generator</p>
+        <p class="reading-value"><span id="genValue">—</span></p>
+        <p class="reading-status" id="outputsStatus">Commanded outputs, not measured</p>
+      </section>
+    </div>
+
+    <!-- Live Telemetry Chart -->
     <section class="card">
       <div class="card-header">
-        <p class="card-title">Readings over time</p>
+        <p class="card-title">Live readings over time</p>
         <div class="chart-legend">
-          <span class="legend-item"><i class="dot dot-ozone"></i>Ozone (ppm)</span>
-          <span class="legend-item"><i class="dot dot-humidity"></i>Humidity (%)</span>
-          <span class="legend-item"><i class="dot dot-temp"></i>Temp (°C)</span>
+          <span class="legend-item"><i class="dot dot-ozone"></i>MQ-136</span>
+          <span class="legend-item"><i class="dot dot-temp"></i>MQ-137</span>
+          <span class="legend-item"><i class="dot dot-humidity"></i>BME680 (kΩ)</span>
         </div>
       </div>
       <div class="chart-wrap">
-        <canvas id="readingsChart"></canvas>
+        <canvas id="liveChart"></canvas>
         <p class="log-empty" id="chartEmpty">No readings yet.</p>
       </div>
     </section>
 
+    <!-- Recent Readings Log -->
     <section class="card">
       <div class="card-header">
-        <p class="card-title">Recent readings</p>
+        <p class="card-title">Recent readings log</p>
         <span class="last-updated" id="lastUpdated">No data yet</span>
       </div>
       <div class="log-list" id="logList">
@@ -123,18 +150,20 @@
       </div>
     </section>
 
+    <!-- Alerts & Safety Diagnostics -->
     <section class="card">
       <div class="card-header">
-        <p class="card-title">Alerts</p>
+        <p class="card-title">Alerts & System Diagnostics</p>
       </div>
       <div class="log-list" id="alertList">
-        <p class="log-empty">No alerts. Ozone levels are within the safe range.</p>
+        <p class="log-empty">No active alerts. Chamber operating within safe parameters.</p>
       </div>
     </section>
 
+    <!-- Captured Reading History -->
     <section class="card">
       <div class="card-header">
-        <p class="card-title">Captured reading status</p>
+        <p class="card-title">Completed Cycle History</p>
       </div>
       <div class="run-list" id="historyList">
         <p class="log-empty">Nothing captured yet.</p>
@@ -149,7 +178,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-  // Fallback if the first CDN is blocked or fails to load.
   if (typeof Chart === "undefined") {
     document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"><\/script>');
   }

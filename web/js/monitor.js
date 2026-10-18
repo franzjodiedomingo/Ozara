@@ -1,333 +1,330 @@
-// js/monitor.js — Monitor page with two tabs:
-//   "Checking status": 10-minute air check of the whole cabinet (before setting the timer).
-//   "Purging monitor": live readings while a cycle runs (started from Home).
-// Nothing is shown until the matching Start button is pressed.
+// js/monitor.js — Unified Live Monitor: real-time live telemetry from the ESP32.
+// Pure live readings only, directly streamed from Firebase Realtime Database.
+//
+// Reads:
+//   devices/{id}/live      latest real-time snapshot (updated every ~5s)
+//   devices/{id}/readings  historical telemetry data points (updated every ~10s)
+//   devices/{id}/status    device readiness, door state, and cycle status
+//   devices/{id}/history   completed session history records
 
 import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
-import { ref, query, limitToLast, onValue, set, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
-import { TEST_SAMPLE_DATA, LS_HISTORY, LS_SESSIONS, OZONE_SAFE_LIMIT_PPM, numberRuns, summaryHtml, formatNumber } from "./summary.js";
+import { ref, query, limitToLast, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+import { createPresence } from "./presence.js";
+import { numberRuns, summaryHtml } from "./summary.js";
 
 const DEVICE_ID = "device1";
 const CHART_POINTS = 60;
 const LOG_ROWS = 10;
-const CHECK_DURATION_SEC = 600; // the check stops after 10 minutes (lower it to test quickly)
-
-// ---- TESTING: the TEST_SAMPLE_DATA flag now lives in summary.js ----
-// When true: fake readings (one every 2s) while a session runs, and
-// sessions/history are kept in localStorage instead of Firebase.
-const SAMPLE_INTERVAL_MS = 2000;
-
-const PHASES = ["check", "purge"];
-const COPY = {
-  check: {
-    title: "Check cabinet air",
-    idle: "Take a 10-minute air reading of the whole cabinet before you set the timer.",
-    running: "Reading the air inside the cabinet.",
-    done: "Check finished. The captured readings are saved below.",
-    badge: { idle: "Not started", running: "Checking", done: "Finished" },
-    empty: "No readings yet. Press Start check to begin.",
-    historyTitle: "Cabinet air check"
-  },
-  purge: {
-    title: "Purging monitor",
-    idle: "Live readings appear here once you start a cycle from Home.",
-    running: "Cycle in progress.",
-    done: "Cycle finished. The captured readings are saved below.",
-    badge: { idle: "Waiting", running: "Purging", done: "Finished" },
-    empty: "No readings yet. They start when a cycle starts.",
-    historyTitle: "Purge cycle"
-  }
-};
+const CHECK_DURATION_SEC = 600;
 
 const $ = (id) => document.getElementById(id);
 const els = {
   connDot: $("connDot"),
-  tabCheck: $("tabCheck"), tabPurge: $("tabPurge"),
-  sessionTitle: $("sessionTitle"), sessionSub: $("sessionSub"), sessionBadge: $("sessionBadge"),
-  sessionProgress: $("sessionProgress"), sessionProgressBar: $("sessionProgressBar"),
-  startCheckBtn: $("startCheckBtn"), goHomeLink: $("goHomeLink"), resetTestBtn: $("resetTestBtn"),
-  ozoneValue: $("ozoneValue"), ozoneStatus: $("ozoneStatus"),
-  humidityValue: $("humidityValue"), temperatureValue: $("temperatureValue"),
-  lastUpdated: $("lastUpdated"), logList: $("logList"), alertList: $("alertList"),
-  historyList: $("historyList"),
-  chartCanvas: $("readingsChart"), chartEmpty: $("chartEmpty")
+  // Banner
+  banner: $("liveBanner"),
+  title: $("liveTitle"),
+  sub: $("liveSub"),
+  icon: $("liveIcon"),
+  pill: $("livePill"),
+  // Session card
+  sessionTitle: $("sessionTitle"),
+  sessionSub: $("sessionSub"),
+  sessionBadge: $("sessionBadge"),
+  sessionProgress: $("sessionProgress"),
+  sessionProgressBar: $("sessionProgressBar"),
+  startCheckBtn: $("startCheckBtn"),
+  goHomeLink: $("goHomeLink"),
+  // Sensor readings
+  bme: $("bmeValue"),
+  mq136: $("mq136Value"),
+  mq137: $("mq137Value"),
+  temp: $("tempValue"),
+  hum: $("humValue"),
+  gen: $("genValue"),
+  outputs: $("outputsStatus"),
+  // Chart & Log
+  chartCanvas: $("liveChart"),
+  chartEmpty: $("chartEmpty"),
+  lastUpdated: $("lastUpdated"),
+  logList: $("logList"),
+  // Alerts & History
+  alertList: $("alertList"),
+  historyList: $("historyList")
 };
 
-const state = {
-  check: { session: null, readings: [], status: "idle", key: "" },
-  purge: { session: null, readings: [], status: "idle", key: "" }
-};
-let historyAll = [];
-let historyReady = false;
-let allReadings = []; // real mode: raw readings from Firebase
-const saving = new Set();
-let activePhase = new URLSearchParams(location.search).get("tab") === "purge" ? "purge" : "check";
+const presence = createPresence();
+let live = null;
+let status = null;
+let readings = [];
+let historyList = [];
+let checkCmd = null;
 let chart = null;
-let lastRenderKey = "";
+let lastReadingsKey = "";
 
 requireAuth().then(() => {
-  els.resetTestBtn.hidden = !TEST_SAMPLE_DATA;
-  if (TEST_SAMPLE_DATA) {
-    els.connDot.style.background = "var(--dot-ok)";
-  } else {
-    attachFirebase();
-  }
-  tick();
-  setInterval(tick, 1000);
-});
-
-// ---------- Data sources ----------
-
-function attachFirebase() {
-  const base = `devices/${DEVICE_ID}`;
   const onErr = (error) => {
     els.connDot.style.background = "var(--dot-err)";
     console.error(error);
   };
 
-  onValue(ref(db, `${base}/commands/startCheck`), (snap) => {
-    const v = snap.val();
-    state.check.session = v && v.requestedAt
-      ? { startedAt: v.requestedAt, durationSec: v.durationSeconds || CHECK_DURATION_SEC }
-      : null;
-  }, onErr);
+  const base = `devices/${DEVICE_ID}`;
 
-  onValue(ref(db, `${base}/commands/startCycle`), (snap) => {
-    const v = snap.val();
-    state.purge.session = v && v.requestedAt && v.durationSeconds
-      ? { startedAt: v.requestedAt, durationSec: v.durationSeconds }
-      : null;
-  }, onErr);
-
-  onValue(query(ref(db, `${base}/readings`), limitToLast(1000)), (snap) => {
+  // 1. Live real-time snapshot
+  onValue(ref(db, `${base}/live`), (snap) => {
     els.connDot.style.background = "var(--dot-ok)";
-    const list = [];
-    snap.forEach((child) => { list.push(child.val()); }); // braces matter: returning truthy stops forEach
-    allReadings = list;
+    live = snap.exists() ? snap.val() : null;
+    if (live && live.ts) presence.observe(live.ts);
+    renderLive();
   }, onErr);
 
-  onValue(query(ref(db, `${base}/history`), limitToLast(200)), (snap) => {
+  // 2. Status node
+  onValue(ref(db, `${base}/status`), (snap) => {
+    status = snap.exists() ? snap.val() : null;
+    if (status && status.lastSeen) presence.observe(status.lastSeen);
+    renderLive();
+  }, onErr);
+
+  // 3. Command listener for air checks
+  onValue(ref(db, `${base}/commands/startCheck`), (snap) => {
+    checkCmd = snap.exists() ? snap.val() : null;
+    renderLive();
+  }, onErr);
+
+  // 4. Time-series real readings
+  onValue(query(ref(db, `${base}/readings`), limitToLast(CHART_POINTS)), (snap) => {
     const list = [];
     snap.forEach((child) => { list.push(child.val()); });
-    historyAll = list;
-    historyReady = true;
+    readings = list;
+    renderReadings();
   }, onErr);
-}
 
-function readJson(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-}
+  // 5. Completed history records
+  onValue(query(ref(db, `${base}/history`), limitToLast(50)), (snap) => {
+    const list = [];
+    snap.forEach((child) => { list.push(child.val()); });
+    historyList = list;
+    renderHistory();
+  }, onErr);
 
-function syncLocal() {
-  const s = readJson(LS_SESSIONS, {});
-  state.check.session = s.check || null;
-  state.purge.session = s.purge || null;
-  historyAll = readJson(LS_HISTORY, []);
-  historyReady = true;
-}
+  // Periodic ticker to check presence & count down time accurately
+  setInterval(renderLive, 1000);
+});
 
-// Real mode: a reading belongs to a phase if it falls inside that phase's time window.
-function rebuildRealReadings() {
-  for (const p of PHASES) {
-    const s = state[p].session;
-    state[p].readings = s
-      ? allReadings.filter((r) => {
-          if (r.phase && r.phase !== p) return false;
-          return r.timestamp >= s.startedAt && r.timestamp <= s.startedAt + s.durationSec * 1000 + 5000;
-        })
-      : [];
+// ---------- Start check button handler ----------
+
+els.startCheckBtn.addEventListener("click", async () => {
+  els.startCheckBtn.disabled = true;
+  els.startCheckBtn.textContent = "Requesting check…";
+  try {
+    await set(ref(db, `devices/${DEVICE_ID}/commands/startCheck`), {
+      durationSeconds: CHECK_DURATION_SEC,
+      requestedAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Failed to request check:", err);
+  } finally {
+    els.startCheckBtn.disabled = false;
+    els.startCheckBtn.textContent = "Start cabinet air check";
   }
-}
-
-// Test mode: generate fake readings from the session start up to "now" (or the session end).
-function generateSample(p) {
-  const st = state[p];
-  const s = st.session;
-  const key = s ? `${s.startedAt}:${s.durationSec}` : "";
-  if (st.key !== key) { st.key = key; st.readings = []; }
-  if (!s) return;
-  const upTo = Math.min(Date.now(), s.startedAt + s.durationSec * 1000);
-  const target = Math.floor((upTo - s.startedAt) / SAMPLE_INTERVAL_MS) + 1;
-  for (let i = st.readings.length; i < target; i++) {
-    st.readings.push(sampleReading(p, i, s.startedAt + i * SAMPLE_INTERVAL_MS, s));
-  }
-}
-
-function sampleReading(phase, i, timestamp, session) {
-  const n = (amp) => (Math.random() - 0.5) * amp;
-  if (phase === "check") {
-    // Before treatment: the cabinet air is ABOVE the safe limit, with peaks.
-    return {
-      ozone_ppm: Math.max(0, 0.15 + 0.035 * Math.sin(i / 20) + n(0.015)),
-      humidity: 62 + 4 * Math.sin(i / 40) + n(1.5),
-      temperature: 31 + 1.2 * Math.sin(i / 50) + n(0.3),
-      timestamp
-    };
-  }
-  // Purge: starts high and drops toward the safe limit as the treatment works.
-  const progress = Math.min(1, (timestamp - session.startedAt) / (session.durationSec * 1000));
-  return {
-    ozone_ppm: Math.max(0, 0.04 + 0.12 * Math.exp(-3 * progress) + n(0.008)),
-    humidity: 62 - 8 * progress + n(1.5),
-    temperature: 31 + 1.5 * Math.sin(i / 30) + n(0.4),
-    timestamp
-  };
-}
-
-// ---------- Session lifecycle ----------
-
-function computeStatus(session) {
-  if (!session) return "idle";
-  return Date.now() < session.startedAt + session.durationSec * 1000 ? "running" : "done";
-}
-
-function buildSummary(p, st) {
-  const r = st.readings;
-  const s = st.session;
-  const avg = (k) => r.reduce((a, x) => a + x[k], 0) / r.length;
-  return {
-    phase: p,
-    startedAt: s.startedAt,
-    endedAt: s.startedAt + s.durationSec * 1000,
-    durationSec: s.durationSec,
-    count: r.length,
-    ozoneAvg: avg("ozone_ppm"),
-    ozonePeak: Math.max(...r.map((x) => x.ozone_ppm)),
-    ozoneStart: r[0].ozone_ppm,
-    ozoneEnd: r[r.length - 1].ozone_ppm,
-    humidityAvg: avg("humidity"),
-    temperatureAvg: avg("temperature")
-  };
-}
-
-// When a run finishes, save its "captured reading status" once.
-function maybeSaveSummary(p) {
-  const st = state[p];
-  if (st.status !== "done" || !historyReady || st.readings.length === 0) return;
-  const id = `${p}:${st.session.startedAt}`;
-  if (saving.has(id) || historyAll.some((h) => h.phase === p && h.startedAt === st.session.startedAt)) return;
-  saving.add(id);
-  const summary = buildSummary(p, st);
-
-  if (TEST_SAMPLE_DATA) {
-    try {
-      const list = readJson(LS_HISTORY, []);
-      list.push(summary);
-      localStorage.setItem(LS_HISTORY, JSON.stringify(list));
-      historyAll = list;
-    } catch (e) { console.error(e); }
-  } else {
-    push(ref(db, `devices/${DEVICE_ID}/history`), { ...summary, savedAt: serverTimestamp() })
-      .catch((e) => { console.error(e); saving.delete(id); });
-  }
-}
-
-function tick() {
-  if (TEST_SAMPLE_DATA) {
-    syncLocal();
-    PHASES.forEach(generateSample);
-  } else {
-    rebuildRealReadings();
-  }
-  for (const p of PHASES) {
-    state[p].status = computeStatus(state[p].session);
-    maybeSaveSummary(p);
-  }
-  render();
-}
+});
 
 // ---------- Rendering ----------
 
-function render() {
-  const p = activePhase;
-  const st = state[p];
-  const copy = COPY[p];
+function phaseLabel(phase) {
+  if (!phase) return "—";
+  const s = String(phase).replaceAll("_", " ").toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
-  els.tabCheck.setAttribute("aria-selected", String(p === "check"));
-  els.tabPurge.setAttribute("aria-selected", String(p === "purge"));
+function formatClock(seconds) {
+  if (typeof seconds !== "number" || seconds < 0) return "0:00";
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 
-  // Session card (updates every second for the countdown)
-  els.sessionTitle.textContent = copy.title;
-  els.sessionBadge.textContent = copy.badge[st.status];
-  els.sessionBadge.className = `session-badge ${st.status}`;
-  let sub = copy[st.status];
-  if (st.status === "running") {
-    const total = st.session.durationSec * 1000;
-    const left = Math.max(0, st.session.startedAt + total - Date.now());
-    sub += ` Time left ${formatCountdown(left)}.`;
-    els.sessionProgress.hidden = false;
-    els.sessionProgressBar.style.width = `${Math.min(100, ((total - left) / total) * 100)}%`;
+function formatTime(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function renderLive() {
+  const pState = presence.state();
+  const online = pState === "online";
+  const valid = online && live && live.valid === true;
+
+  // Banner state
+  let bannerClass = "unknown", title, sub, icon, pill;
+  if (pState === "checking") {
+    title = "Checking device…";
+    sub = "Waiting for the unit to report in.";
+    icon = "•";
+    pill = "Checking";
+  } else if (!online) {
+    title = "Unit offline";
+    sub = live
+      ? "No update from the unit recently. Check its power and Wi-Fi connection."
+      : "Waiting for telemetry from the unit.";
+    icon = "!";
+    pill = "Offline";
   } else {
+    const fault = live.phase === "SENSOR_FAULT" || live.phase === "SENSOR_ERROR";
+    bannerClass = fault ? "unsafe" : "safe";
+    title = phaseLabel(live.phase);
+    sub = typeof live.remaining === "number" && live.remaining > 0
+      ? `${formatClock(live.remaining)} remaining in this phase`
+      : "Unit is online and streaming live telemetry.";
+    icon = fault ? "!" : "✓";
+    pill = "Online";
+  }
+
+  els.banner.className = `status-banner ${bannerClass}`;
+  els.title.textContent = title;
+  els.sub.textContent = sub;
+  els.icon.textContent = icon;
+  els.pill.textContent = pill;
+
+  // Session Card
+  renderSessionCard(online);
+
+  // Sensor reading values
+  els.mq136.textContent = valid && typeof live.mq136 === "number" ? live.mq136 : "—";
+  els.mq137.textContent = valid && typeof live.mq137 === "number" ? live.mq137 : "—";
+  els.bme.textContent = valid && typeof live.gasKOhm === "number" ? live.gasKOhm.toFixed(2) : "—";
+  els.temp.textContent = valid && typeof live.temperature === "number" ? live.temperature.toFixed(1) : "—";
+  els.hum.textContent = valid && typeof live.humidity === "number" ? live.humidity.toFixed(1) : "—";
+
+  // Actuator / Fan Outputs
+  if (online && live) {
+    els.gen.textContent = live.ozoneOn ? "ON" : "OFF";
+    els.gen.style.color = live.ozoneOn ? "var(--green)" : "";
+    const fanState = (on) => (on ? "on" : "off");
+    els.outputs.textContent =
+      `Circulation fan ${fanState(live.fan)} · Purge fan ${fanState(live.purgeFan)} · Sensor fan ${fanState(live.sensorFan)}`;
+  } else {
+    els.gen.textContent = "—";
+    els.gen.style.color = "";
+    els.outputs.textContent = "Commanded outputs, not measured";
+  }
+
+  // System & Safety Alerts
+  renderAlerts(online, valid);
+}
+
+function renderSessionCard(online) {
+  if (!online || !live) {
+    els.sessionTitle.textContent = "Cabinet status";
+    els.sessionSub.textContent = "Waiting for real-time telemetry from unit.";
+    els.sessionBadge.textContent = "Offline";
+    els.sessionBadge.className = "session-badge";
+    els.sessionProgress.hidden = true;
+    return;
+  }
+
+  const phase = live.phase || "";
+  const remaining = typeof live.remaining === "number" ? live.remaining : -1;
+  const isRunning = phase.includes("RUNNING") || phase.includes("PURGING") || phase === "START_COUNTDOWN";
+
+  if (isRunning) {
+    els.sessionTitle.textContent = phaseLabel(phase);
+    els.sessionSub.textContent = remaining >= 0 ? `${formatClock(remaining)} remaining` : "Cycle in progress";
+    els.sessionBadge.textContent = "Active";
+    els.sessionBadge.className = "session-badge ok";
+
+    if (remaining >= 0 && typeof live.selectedSeconds === "number" && live.selectedSeconds > 0) {
+      const pct = Math.max(0, Math.min(100, Math.round(((live.selectedSeconds - remaining) / live.selectedSeconds) * 100)));
+      els.sessionProgress.hidden = false;
+      els.sessionProgressBar.style.width = `${pct}%`;
+    } else {
+      els.sessionProgress.hidden = true;
+    }
+  } else if (phase === "CYCLE_COMPLETE") {
+    els.sessionTitle.textContent = "Cycle complete";
+    els.sessionSub.textContent = "Sanitization finished. Chamber is safe to open.";
+    els.sessionBadge.textContent = "Completed";
+    els.sessionBadge.className = "session-badge ok";
+    els.sessionProgress.hidden = true;
+  } else {
+    els.sessionTitle.textContent = "Cabinet idle";
+    els.sessionSub.textContent = "Monitoring chamber air. Ready for check or sanitization cycle.";
+    els.sessionBadge.textContent = "Idle";
+    els.sessionBadge.className = "session-badge";
     els.sessionProgress.hidden = true;
   }
-  els.sessionSub.textContent = sub;
-  els.startCheckBtn.hidden = !(p === "check" && st.status !== "running");
-  els.startCheckBtn.textContent = st.status === "done" ? "Run check again" : "Start check";
-  els.goHomeLink.hidden = !(p === "purge" && st.status === "idle");
-
-  // Data sections: only redraw when something changed
-  const key = `${p}:${st.session ? st.session.startedAt : 0}:${st.readings.length}:${st.status}:${historyAll.length}`;
-  if (key === lastRenderKey) return;
-  lastRenderKey = key;
-
-  const readings = st.readings;
-  updateReadingCards(readings[readings.length - 1] || null, st.status);
-  updateLogList(readings.slice(-LOG_ROWS).reverse(), copy.empty);
-  updateChart(readings.slice(-CHART_POINTS), copy.empty);
-  updateAlerts(readings);
-  updateHistory(p);
 }
 
-function updateReadingCards(reading, status) {
-  if (!reading) {
-    els.ozoneValue.textContent = "—";
-    els.humidityValue.textContent = "—";
-    els.temperatureValue.textContent = "—";
-    els.ozoneStatus.textContent = status === "idle" ? "Not started" : "Waiting for readings…";
-    els.ozoneStatus.classList.remove("warn");
-    els.lastUpdated.textContent = "No data yet";
-    return;
-  }
-  els.ozoneValue.textContent = formatNumber(reading.ozone_ppm);
-  els.humidityValue.textContent = formatNumber(reading.humidity);
-  els.temperatureValue.textContent = formatNumber(reading.temperature);
-  els.lastUpdated.textContent = `${status === "done" ? "Final reading" : "Updated"} ${formatTime(reading.timestamp)}`;
+function renderAlerts(online, valid) {
+  const alerts = [];
 
-  const high = reading.ozone_ppm > OZONE_SAFE_LIMIT_PPM;
-  els.ozoneStatus.textContent = high ? "Above safe limit" : "Within safe range";
-  els.ozoneStatus.classList.toggle("warn", high);
+  if (!online) {
+    alerts.push("Unit is currently offline. Ensure ESP32 is powered on and connected to Wi-Fi.");
+  } else {
+    if (live && (live.phase === "SENSOR_FAULT" || live.phase === "SENSOR_ERROR")) {
+      alerts.push("Sensor fault detected on ESP32 unit. Check wiring and sensors.");
+    }
+    if (live && live.valid === false) {
+      alerts.push("Sensors are currently warming up. Readings will stabilize shortly.");
+    }
+    if (status && status.doorOpen) {
+      alerts.push("Cabinet door is currently OPEN.");
+    }
+  }
+
+  if (alerts.length === 0) {
+    els.alertList.innerHTML = `<p class="log-empty">No active alerts. Chamber operating within safe parameters.</p>`;
+  } else {
+    els.alertList.innerHTML = alerts.map((msg) => `
+      <div class="log-row" style="color:var(--err); font-weight:600;">
+        <span>⚠️ ${msg}</span>
+      </div>`).join("");
+  }
 }
 
-function updateLogList(readings, emptyText) {
-  if (readings.length === 0) {
-    els.logList.innerHTML = `<p class="log-empty">${emptyText}</p>`;
+function renderReadings() {
+  const last = readings[readings.length - 1];
+  const key = `${readings.length}:${last ? last.timestamp : 0}`;
+  if (key === lastReadingsKey) return;
+  lastReadingsKey = key;
+
+  els.lastUpdated.textContent = last ? `Last reading ${formatTime(last.timestamp)}` : "No data yet";
+  updateLog();
+  updateChart();
+}
+
+function updateLog() {
+  const rows = readings.filter((r) => r.valid !== false).slice(-LOG_ROWS).reverse();
+  if (rows.length === 0) {
+    els.logList.innerHTML = `<p class="log-empty">No readings yet.</p>`;
     return;
   }
-  els.logList.innerHTML = readings
-    .map((r) => `
-      <div class="log-row">
-        <span>${formatNumber(r.ozone_ppm)} ppm · ${formatNumber(r.humidity)}% · ${formatNumber(r.temperature)}°C</span>
-        <span class="log-time">${formatTime(r.timestamp)}</span>
-      </div>`)
-    .join("");
+  const n = (v, d = 0) => (typeof v === "number" ? v.toFixed(d) : "—");
+  els.logList.innerHTML = rows.map((r) => `
+    <div class="log-row">
+      <span>MQ-136 ${n(r.mq136)} · MQ-137 ${n(r.mq137)} · BME ${n(r.gasKOhm, 1)} kΩ · ${n(r.temperature, 1)}°C · ${n(r.humidity, 0)}%</span>
+      <span class="log-time">${formatTime(r.timestamp)}</span>
+    </div>`).join("");
 }
 
 function ensureChart() {
   if (chart || typeof Chart === "undefined") return;
-  const line = (label, color, axis, fill) => ({
-    label, data: [], borderColor: color,
-    backgroundColor: fill ? "rgba(26,165,101,0.12)" : "transparent",
-    yAxisID: axis, tension: 0.3, fill, pointRadius: 0, borderWidth: 2
+  const line = (label, color, axis) => ({
+    label,
+    data: [],
+    borderColor: color,
+    backgroundColor: "transparent",
+    yAxisID: axis,
+    tension: 0.3,
+    pointRadius: 0,
+    borderWidth: 2
   });
+
   chart = new Chart(els.chartCanvas, {
     type: "line",
     data: {
       labels: [],
       datasets: [
-        line("Ozone (ppm)", "#1aa565", "y", true),
-        line("Humidity (%)", "#3b82f6", "y1", false),
-        line("Temp (°C)", "#f59e0b", "y1", false)
+        line("MQ-136", "#1aa565", "y"),
+        line("MQ-137", "#f59e0b", "y"),
+        line("BME680 (kΩ)", "#3b82f6", "y1")
       ]
     },
     options: {
@@ -337,107 +334,53 @@ function ensureChart() {
       interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: "#6b736b" } },
+        x: {
+          grid: { display: false },
+          ticks: { maxTicksLimit: 6, color: "#6b736b" }
+        },
         y: {
-          position: "left", beginAtZero: true, suggestedMax: 0.15,
-          title: { display: true, text: "ppm" },
-          grid: { color: "#e6e8e2" }, ticks: { color: "#6b736b" }
+          position: "left",
+          beginAtZero: true,
+          suggestedMax: 4095,
+          title: { display: true, text: "ADC" },
+          grid: { color: "#e6e8e2" },
+          ticks: { color: "#6b736b" }
         },
         y1: {
-          position: "right", beginAtZero: true, suggestedMax: 100,
-          title: { display: true, text: "% / °C" },
-          grid: { display: false }, ticks: { color: "#6b736b" }
+          position: "right",
+          beginAtZero: true,
+          title: { display: true, text: "kΩ" },
+          grid: { display: false },
+          ticks: { color: "#6b736b" }
         }
       }
     }
   });
 }
 
-// With no readings the chart keeps its axes and legend but draws no lines.
-function updateChart(readings, emptyText) {
+function updateChart() {
   ensureChart();
   if (!chart) {
     els.chartEmpty.style.display = "flex";
-    els.chartEmpty.textContent = "Chart library failed to load. Check your connection or ad blocker, then refresh.";
+    els.chartEmpty.textContent = "Chart library loading…";
     return;
   }
-  chart.data.labels = readings.map((r) => formatTime(r.timestamp));
-  chart.data.datasets[0].data = readings.map((r) => r.ozone_ppm);
-  chart.data.datasets[1].data = readings.map((r) => r.humidity);
-  chart.data.datasets[2].data = readings.map((r) => r.temperature);
+  const rows = readings.filter((r) => r.valid !== false);
+  chart.data.labels = rows.map((r) => formatTime(r.timestamp));
+  chart.data.datasets[0].data = rows.map((r) => r.mq136);
+  chart.data.datasets[1].data = rows.map((r) => r.mq137);
+  chart.data.datasets[2].data = rows.map((r) => r.gasKOhm);
   chart.update("none");
 
-  els.chartEmpty.textContent = emptyText;
-  els.chartEmpty.style.display = readings.length === 0 ? "flex" : "none";
+  els.chartEmpty.textContent = "No readings yet.";
+  els.chartEmpty.style.display = rows.length === 0 ? "flex" : "none";
 }
 
-function updateAlerts(readings) {
-  const high = readings.filter((r) => r.ozone_ppm > OZONE_SAFE_LIMIT_PPM).slice(-5).reverse();
-  if (high.length === 0) {
-    els.alertList.innerHTML = `<p class="log-empty">No alerts. Ozone levels are within the safe range.</p>`;
+function renderHistory() {
+  if (!historyList || historyList.length === 0) {
+    els.historyList.innerHTML = `<p class="log-empty">No completed cycles recorded yet.</p>`;
     return;
   }
-  els.alertList.innerHTML = high
-    .map((r) => `
-      <div class="log-row alert-row">
-        <span>Ozone reading ${formatNumber(r.ozone_ppm)} ppm exceeded safe limit</span>
-        <span class="log-time">${formatTime(r.timestamp)}</span>
-      </div>`)
-    .join("");
-}
-
-// "Captured reading status": finished runs of this tab, newest first, labeled Test N.
-function updateHistory(p) {
-  const items = numberRuns(historyAll).filter((x) => x.run.phase === p).reverse().slice(0, 10);
-  els.historyList.innerHTML = items.length
-    ? items.map((x) => summaryHtml(x.run, x.no)).join("")
-    : `<p class="log-empty">Nothing captured yet. A summary is saved when the run finishes.</p>`;
-}
-
-// ---------- Events ----------
-
-els.tabCheck.addEventListener("click", () => { activePhase = "check"; lastRenderKey = ""; render(); });
-els.tabPurge.addEventListener("click", () => { activePhase = "purge"; lastRenderKey = ""; render(); });
-
-els.startCheckBtn.addEventListener("click", async () => {
-  els.startCheckBtn.disabled = true;
-  try {
-    if (TEST_SAMPLE_DATA) {
-      const s = readJson(LS_SESSIONS, {});
-      s.check = { startedAt: Date.now(), durationSec: CHECK_DURATION_SEC };
-      localStorage.setItem(LS_SESSIONS, JSON.stringify(s));
-    } else {
-      await set(ref(db, `devices/${DEVICE_ID}/commands/startCheck`), {
-        requestedAt: serverTimestamp(),
-        durationSeconds: CHECK_DURATION_SEC
-      });
-    }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    els.startCheckBtn.disabled = false;
-    tick();
-  }
-});
-
-els.resetTestBtn.addEventListener("click", () => {
-  localStorage.removeItem(LS_SESSIONS);
-  localStorage.removeItem(LS_HISTORY);
-  saving.clear();
-  lastRenderKey = "";
-  tick();
-});
-
-// ---------- Formatting ----------
-
-function formatTime(ts) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function formatCountdown(ms) {
-  const total = Math.ceil(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const numbered = numberRuns(historyList).reverse();
+  els.historyList.innerHTML = numbered.slice(0, 10).map(({ run, no }) => summaryHtml(run, no)).join("");
 }
