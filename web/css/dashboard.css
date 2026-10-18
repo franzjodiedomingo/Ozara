@@ -22,7 +22,7 @@ body{
 
 /* Green top bar */
 .topbar{
-  background:var(--green);
+  background:#0b3d3a;
   color:#fff;
   display:flex;
   align-items:center;
@@ -549,3 +549,8 @@ body{
 .run-stat.ok b{ color:var(--green); }
 .run-stat.warn{ background:#fdecec; }
 .run-stat.warn b{ color:var(--err); }
+
+/* Top-bar logo image */
+a.brand{ text-decoration:none; color:inherit; }
+.brand-logo{ display:block; height:40px; width:auto; max-width:100%; }
+@media (max-width:600px){ .brand-logo{ height:34px; } }
