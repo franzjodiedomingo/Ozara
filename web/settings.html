@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ozara — Settings</title>
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="top-brand" href="home.html" aria-label="Ozara home"><img src="images/ozara-logo.png" alt="Ozara"></a>
+  <h1 class="top-title">Settings</h1>
+  <div class="topbar-right">
+    <span class="status-dot" id="connDot" title="Database connection" hidden></span>
+
+    <div class="menu">
+      <button class="icon-btn" id="notifBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge" id="notifBadge" hidden>0</span>
+      </button>
+      <div class="dropdown notif-panel" id="notifPanel" hidden>
+        <div class="dropdown-head">
+          <p>Notifications</p>
+          <div class="header-actions">
+            <button class="link-btn" id="notifReadAll" type="button">Mark all read</button>
+            <button class="link-btn link-btn-muted" id="notifClear" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="notif-list" id="notifList"><p class="notif-empty">No notifications yet.</p></div>
+        <a class="dropdown-foot" href="settings.html">Notification settings</a>
+      </div>
+    </div>
+
+    <div class="menu">
+      <button class="user-btn" id="userBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userPanel">
+        <span class="avatar" id="userAvatar">?</span>
+        <span class="user-text">
+          <span class="user-name" id="userName">—</span>
+          <span class="user-sub" id="userSub">Member</span>
+        </span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="dropdown user-panel" id="userPanel" hidden>
+        <p class="user-email" id="userEmail"></p>
+        <a class="dropdown-item" href="profile.html">Profile</a>
+        <a class="dropdown-item" href="settings.html">Settings</a>
+        <button class="dropdown-item danger" id="logoutBtn" type="button">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="app-layout">
+
+<nav class="sidebar" aria-label="Main navigation">
+  <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="images/ozara-logo.png" alt="Ozara"></a>
+  <div class="side-nav">
+    <a class="nav-btn" href="home.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="nav-btn" href="monitor.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+      <span>Monitor</span>
+    </a>
+    <a class="nav-btn" href="history.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span>History</span>
+    </a>
+    <a class="nav-btn" href="profile.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      <span>Profile</span>
+    </a>
+  </div>
+  <div class="side-bottom">
+    <a class="nav-btn active" href="settings.html" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </a>
+    <div class="side-device" id="sideDevice">
+      <span class="status-dot unknown" id="deviceDot"></span>
+      <div>
+        <p class="side-device-title" id="deviceTitle">Checking device…</p>
+        <p class="side-device-sub" id="deviceSub">Please wait</p>
+      </div>
+    </div>
+  </div>
+</nav>
+
+  <main class="app-main">
+    <section class="card">
+      <p class="card-title" style="margin-bottom:14px;">Profile</p>
+      <label class="form-label" for="setName">Display name</label>
+      <div class="manual-row">
+        <input type="text" id="setName" maxlength="40" placeholder="Your name" autocomplete="name">
+        <button class="submit-small" id="saveNameBtn" type="button">Save</button>
+      </div>
+      <label class="form-label" for="setEmail" style="margin-top:14px;">Email</label>
+      <div class="manual-row">
+        <input type="email" id="setEmail" readonly>
+      </div>
+      <p class="settings-msg" id="nameMsg"></p>
+    </section>
+
+    <section class="card">
+      <p class="card-title">Notifications</p>
+      <p class="timer-sub" style="margin-top:4px;">Alerts show in the bell at the top. They are created while Ozara is open in your browser.</p>
+
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Device online / offline</p>
+          <p class="setting-desc">When the unit stops sending data or comes back.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="optOffline" aria-label="Device online or offline alerts"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Cycle started / finished</p>
+          <p class="setting-desc">When a sanitization cycle begins or ends.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="optCycle" aria-label="Cycle alerts"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Sensor faults</p>
+          <p class="setting-desc">When the unit reports a sensor problem.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="optFault" aria-label="Sensor fault alerts"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <p class="setting-name">Desktop notifications</p>
+          <p class="setting-desc">Also show a browser notification when this tab is in the background.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="optDesktop" aria-label="Desktop notifications"><span></span></label>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:6px;">
+        <button class="btn-secondary" id="testNotifBtn" type="button">Send test notification</button>
+        <p class="settings-msg" id="notifMsg" style="margin:0;"></p>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="card-title" style="margin-bottom:6px;">Account</p>
+      <p class="timer-sub" style="margin-bottom:12px;">We'll email you a link to set a new password.</p>
+      <button class="btn-secondary" id="resetPwBtn" type="button">Send password reset email</button>
+      <p class="settings-msg" id="accountMsg"></p>
+    </section>
+  </main>
+
+</div>
+
+<p class="version">Ozara v1.0 · ESP32 IoT</p>
+
+<script type="module" src="js/settings.js"></script>
+<script type="module" src="js/layout.js"></script>
+</body>
+</html>
