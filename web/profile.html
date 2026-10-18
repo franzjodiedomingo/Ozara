@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/profile.css">
 </head>
 <body>
 
@@ -59,7 +60,7 @@
 
 <div class="app-layout">
 
-  <nav class="sidebar" aria-label="Main navigation">
+<nav class="sidebar" aria-label="Main navigation">
   <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="images/ozara-logo.png" alt="Ozara"></a>
   <div class="side-nav">
     <a class="nav-btn" href="home.html">
@@ -95,17 +96,69 @@
 </nav>
 
   <main class="app-main">
-    <section class="card placeholder-card">
-      <p class="card-title">Profile</p>
-      <p class="log-empty" id="profilePlaceholder">Account settings will show up here once it's built.</p>
+    <p class="profile-intro">Manage your account information.</p>
+
+    <section class="card profile-card">
+      <div class="profile-head">
+        <span class="avatar avatar-lg" id="profAvatar">?</span>
+        <div class="profile-id">
+          <h2 class="profile-name" id="profName">—</h2>
+          <input class="profile-input" id="profNameInput" type="text" maxlength="40" placeholder="Your full name" autocomplete="name" aria-label="Full name" hidden>
+          <p class="profile-role" id="profRoleLine">Member</p>
+        </div>
+        <div class="profile-actions">
+          <button class="pill-btn" id="editBtn" type="button">Edit</button>
+          <button class="pill-btn pill-btn-primary" id="saveBtn" type="button" hidden>Save</button>
+          <button class="pill-btn pill-btn-muted" id="cancelBtn" type="button" hidden>Cancel</button>
+        </div>
+      </div>
+
+      <dl class="profile-rows">
+        <div class="profile-row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          <dt>Email</dt>
+          <dd id="profEmail">—</dd>
+        </div>
+        <div class="profile-row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <dt>Contact no.</dt>
+          <dd>
+            <span id="profPhone" class="muted">Not added</span>
+            <input class="profile-input" id="profPhoneInput" type="tel" maxlength="20" placeholder="e.g. 0917 123 4567" autocomplete="tel" aria-label="Contact number" hidden>
+          </dd>
+        </div>
+        <div class="profile-row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <dt>Role</dt>
+          <dd id="profRole">Member</dd>
+        </div>
+        <div class="profile-row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <dt>Joined</dt>
+          <dd id="profJoined">—</dd>
+        </div>
+      </dl>
+      <p class="settings-msg" id="profMsg" role="status"></p>
     </section>
 
+    <section class="card profile-link-card">
+      <button class="profile-link" id="changePwBtn" type="button">
+        <span class="profile-link-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+        <span class="profile-link-text">
+          <span class="profile-link-title">Change Password</span>
+          <span class="profile-link-sub">Keep your account secure.</span>
+        </span>
+        <svg class="chev-right" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <p class="settings-msg" id="pwMsg" role="status"></p>
+    </section>
   </main>
 
 </div>
 
-<script type="module" src="js/profile.js"></script>
+<p class="version">Ozara v1.0 · ESP32 IoT</p>
 
+<script type="module" src="js/profile.js"></script>
 <script type="module" src="js/layout.js"></script>
 </body>
 </html>

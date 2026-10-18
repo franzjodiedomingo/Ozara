@@ -10,6 +10,7 @@ import { auth, db } from "../firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { ref, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { createPresence } from "./presence.js";
+import { roleLabel, resolveName } from "./roles.js";
 
 const DEVICE_ID = "device1";
 const NOTIF_KEY = "ozara_notifications";
@@ -150,7 +151,11 @@ export function addNotification(type, title, text, { force = false } = {}) {
 // ---------- User info ----------
 
 function initials(name) {
-  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = words[0][0];
+  const last = words.length > 1 ? words[words.length - 1][0] : "";
+  return (first + last).toUpperCase();
 }
 
 function showUser(name, photoURL, role) {
@@ -158,7 +163,7 @@ function showUser(name, photoURL, role) {
   const subEl = $("userSub");
   const avatar = $("userAvatar");
   if (nameEl) nameEl.textContent = name;
-  if (subEl) subEl.textContent = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
+  if (subEl) subEl.textContent = role || "Member";
   if (avatar) {
     avatar.replaceChildren();
     if (photoURL) {
@@ -244,13 +249,12 @@ setInterval(() => { const panel = $("notifPanel"); if (panel && !panel.hidden) r
 let started = false;
 onAuthStateChanged(auth, (user) => {
   if (!user) return;
-  const fallback = user.displayName || (user.email ? user.email.split("@")[0] : "User");
-  showUser(fallback, user.photoURL);
+  showUser(resolveName(user, null), user.photoURL, roleLabel(user.email, null));
 
   // display name / role saved from Settings (users/{uid})
   onValue(ref(db, `users/${user.uid}`), (snap) => {
     const v = snap.val() || {};
-    showUser(v.name || fallback, user.photoURL, v.role);
+    showUser(resolveName(user, v.name), user.photoURL, roleLabel(user.email, v.role));
   }, () => { /* no access: keep the fallback name */ });
 
   if (started) return;
