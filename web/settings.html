@@ -96,20 +96,6 @@
 
   <main class="app-main">
     <section class="card">
-      <p class="card-title" style="margin-bottom:14px;">Profile</p>
-      <label class="form-label" for="setName">Display name</label>
-      <div class="manual-row">
-        <input type="text" id="setName" maxlength="40" placeholder="Your name" autocomplete="name">
-        <button class="submit-small" id="saveNameBtn" type="button">Save</button>
-      </div>
-      <label class="form-label" for="setEmail" style="margin-top:14px;">Email</label>
-      <div class="manual-row">
-        <input type="email" id="setEmail" readonly>
-      </div>
-      <p class="settings-msg" id="nameMsg"></p>
-    </section>
-
-    <section class="card">
       <p class="card-title">Notifications</p>
       <p class="timer-sub" style="margin-top:4px;">Alerts show in the bell at the top. They are created while Ozara is open in your browser.</p>
 
@@ -141,10 +127,7 @@
         </div>
         <label class="switch"><input type="checkbox" id="optDesktop" aria-label="Desktop notifications"><span></span></label>
       </div>
-      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:6px;">
-        <button class="btn-secondary" id="testNotifBtn" type="button">Send test notification</button>
-        <p class="settings-msg" id="notifMsg" style="margin:0;"></p>
-      </div>
+      <p class="settings-msg" id="notifMsg"></p>
     </section>
 
     <section class="card">
