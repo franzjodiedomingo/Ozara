@@ -979,6 +979,7 @@ void setup() {
 }
 void loop() {
   expireWebButton();
+  serviceRemoteButtons();   // presses requested from the Ozara web app (remote_buttons.h)
   updateBuzzer();updateButtons();
   unsigned long now=millis();
   if(confirmationVisible && now-confirmationStartedAt>=CONFIRM_SCREEN_MS) {

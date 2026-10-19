@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 // Include AFTER web_server.h in the .ino (uses state, live readings, etc.).
+#include "remote_buttons.h"
 //
 // Sends the unit's live data to Firebase over the internet, through the ESP32's
 // STA Wi-Fi (STA_SSID / STA_PASS in web_server.h). The Ozara web app reads it
@@ -15,6 +16,11 @@
 //   live      overwritten every FB_LIVE_MS      -> Live page
 //   status    overwritten every FB_LIVE_MS      -> Home page (ready, sensors, cycle)
 //   readings  one new child every FB_READING_MS -> Live chart and recent readings
+//
+// Reads, about every FB_CMD_POLL_MS:
+//   commands/button     -> Remote controls on the Monitor page (see remote_buttons.h)
+// Writes back:
+//   commands/buttonAck  -> tells the web app whether the press was applied
 //
 // The unit signs in to Firebase Auth with its own account (FB_DEVICE_EMAIL).
 // Create that user in Firebase Console > Authentication > Users first, and keep
@@ -30,6 +36,7 @@ const char* FB_DEVICE_EMAIL    = "device1@ozara.local";    // must match databas
 const char* FB_DEVICE_PASSWORD = "Admin@123"; // no quotes or backslashes
 const unsigned long FB_LIVE_MS    = 5000UL;   // live + status
 const unsigned long FB_READING_MS = 10000UL;  // history/chart point
+const unsigned long FB_CMD_POLL_MS = 700UL;   // how often to look for a remote button press
 
 String fbIdToken, fbRefreshToken;
 unsigned long fbTokenExpiresAt = 0;   // millis() when the id token should be renewed
@@ -50,6 +57,22 @@ String fbJsonString(const String& body, const char* key) {
   int j = body.indexOf('"', i + 1);
   if (j < 0) return "";
   return body.substring(i + 1, j);
+}
+
+
+// Number after "key": in a flat JSON body, or `fallback` if missing.
+long fbJsonNumber(const String& body, const char* key, long fallback = -1) {
+  String pattern = String("\"") + key + "\"";
+  int i = body.indexOf(pattern);
+  if (i < 0) return fallback;
+  i = body.indexOf(':', i + pattern.length());
+  if (i < 0) return fallback;
+  i++;
+  while (i < (int)body.length() && body[i] == ' ') i++;
+  int j = i;
+  while (j < (int)body.length() && ((body[j] >= '0' && body[j] <= '9') || body[j] == '-')) j++;
+  if (j == i) return fallback;
+  return body.substring(i, j).toInt();
 }
 
 // One HTTPS request. Returns the HTTP status code (or a negative error).
@@ -162,6 +185,7 @@ String fbBuildPatch() {
   b += ",\"purgeFan\":" + fbBool(digitalRead(CARBON_FAN_PIN) == LOW);
   b += ",\"sensorFan\":" + fbBool(digitalRead(SENSOR_FAN_PIN) == LOW);
   b += ",\"selectedSeconds\":" + String(selectedTimeS);
+  b += ",\"hint\":\"" + String(webInstruction()) + "\"";   // what the buttons do right now
   b += ",\"aborted\":" + fbBool(cycleAborted);
   b += ",\"ts\":{\".sv\":\"timestamp\"}},";
 
@@ -197,12 +221,67 @@ void fbHandleCode(int code, const char* what) {
   }
 }
 
+
+// ---------- Remote buttons (commands/button) ----------
+// Its own TLS client is kept open between polls so each check is quick.
+WiFiClientSecure fbCmdClient;
+HTTPClient fbCmdHttp;
+String fbCmdLastId;
+bool fbCmdSeeded = false;
+unsigned long fbCmdLastPoll = 0;
+
+void fbPollButton() {
+  if (millis() - fbCmdLastPoll < FB_CMD_POLL_MS) return;
+  fbCmdLastPoll = millis();
+
+  String url = String(FB_DB_URL) + "/devices/" + FB_DEVICE_ID + "/commands/button.json?auth=" + fbIdToken;
+  fbCmdClient.setInsecure();
+  fbCmdHttp.setReuse(true);
+  fbCmdHttp.setConnectTimeout(3000);
+  fbCmdHttp.setTimeout(4000);
+  if (!fbCmdHttp.begin(fbCmdClient, url)) return;
+  int code = fbCmdHttp.GET();
+  String body = (code == 200) ? fbCmdHttp.getString() : String();
+  fbCmdHttp.end();                         // the connection stays open for the next poll
+
+  if (code != 200) {
+    if (code == 401 && ++fbAuthFails >= 3) { fbIdToken = ""; fbAuthFails = 0; }
+    return;
+  }
+  fbAuthFails = 0;
+  body.trim();
+
+  String id = fbJsonString(body, "id");
+  if (body == "null" || id.length() == 0) { fbCmdSeeded = true; return; }
+  if (!fbCmdSeeded) { fbCmdSeeded = true; fbCmdLastId = id; return; }   // never replay a press from before boot
+  if (id == fbCmdLastId) return;
+  fbCmdLastId = id;
+
+  String act = fbJsonString(body, "action");
+  long key = fbJsonNumber(body, "key");
+  int action = act == "tap" ? RC_TAP : act == "hold" ? RC_HOLD : act == "release" ? RC_RELEASE : -1;
+  if (key < 0 || key > 2 || action < 0) return;
+  Serial.print("REMOTE: "); Serial.print(act); Serial.print(" key "); Serial.println(key);
+  rcSubmit((int)key, action, id);
+}
+
+void fbSendButtonAck() {
+  RcResult r;
+  if (!rcTakeResult(r)) return;
+  const char* act = r.action == RC_TAP ? "tap" : r.action == RC_HOLD ? "hold" : "release";
+  String body = String("{\"id\":\"") + r.id + "\",\"action\":\"" + act + "\",\"ok\":" + fbBool(r.ok) +
+                ",\"note\":\"" + r.note + "\",\"ts\":{\".sv\":\"timestamp\"}}";
+  String url = String(FB_DB_URL) + "/devices/" + FB_DEVICE_ID + "/commands/buttonAck.json?auth=" + fbIdToken + "&print=silent";
+  fbRequest("PUT", url, body, "application/json");
+}
+
 void firebaseTask(void*) {
   unsigned long lastLive = 0, lastReading = 0, lastReadingAtSent = 0;
   bool first = true;
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(250));
+    vTaskDelay(pdMS_TO_TICKS(150));
     if (WiFi.status() != WL_CONNECTED) continue;
+    if (!first && fbIdToken.length() && fbEnsureToken()) { fbPollButton(); fbSendButtonAck(); }
     if (!first && millis() - lastLive < FB_LIVE_MS) continue;
     if (!fbEnsureToken()) { vTaskDelay(pdMS_TO_TICKS(10000)); continue; }
     first = false;
