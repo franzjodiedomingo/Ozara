@@ -6,7 +6,7 @@ export const LS_HISTORY = "ozara_test_history";
 export const LS_SESSIONS = "ozara_test_sessions";
 export const OZONE_SAFE_LIMIT_PPM = 0.1;
 
-const PHASE_LABEL = {
+export const PHASE_LABEL = {
   check: "Cabinet air check",
   purge: "Purge cycle",
   WARMUP: "Sensor warm-up",

@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/history.css">
 </head>
 <body>
 
@@ -95,8 +96,78 @@
 </nav>
 
   <main class="app-main" id="historyMain">
-    <p class="log-empty" id="historyEmpty">Loading history…</p>
+
+    <section class="hx-intro">
+      <p class="hx-lead">View your past monitoring cycles and treatment history.</p>
+      <p class="hx-sub">Here you can see the details of each completed cycle, including the detected VOC levels, treatment duration, and results. Everything shown is recorded live from your Ozara unit.</p>
+    </section>
+
+    <div class="hx-live" id="liveStrip" hidden>
+      <span class="hx-live-dot"></span>
+      <span id="liveStripText"></span>
+      <a href="monitor.html">Open Monitor</a>
+    </div>
+
+    <section class="card hx-filters" aria-label="Filters">
+      <label class="hx-field">
+        <span class="hx-field-label">Date Range</span>
+        <select id="fDate">
+          <option value="7" selected>Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="0">All time</option>
+        </select>
+      </label>
+      <label class="hx-field">
+        <span class="hx-field-label">Status</span>
+        <select id="fStatus">
+          <option value="all" selected>All</option>
+          <option value="completed">Completed</option>
+          <option value="attention">Needs attention</option>
+          <option value="failed">Failed</option>
+        </select>
+      </label>
+      <button class="hx-export" id="exportBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="m8 8 4-4 4 4"/><path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg>
+        Export CSV
+      </button>
+    </section>
+
+    <section class="card hx-table-card">
+      <div class="hx-table-wrap">
+        <table class="hx-table">
+          <thead>
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Cycle ID</th>
+              <th>Status</th>
+              <th title="BME680 gas resistance. Lower kΩ means more VOCs in the air.">VOC (kΩ)</th>
+              <th>Duration</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <p class="log-empty hx-empty" id="historyEmpty">Loading history…</p>
+      <div class="hx-foot" id="histFoot" hidden>
+        <span id="histCount"></span>
+        <nav class="hx-pager" id="histPager" aria-label="Pagination"></nav>
+      </div>
+    </section>
+
   </main>
+
+  <dialog class="hx-dialog" id="detailDialog">
+    <div class="hx-dialog-head">
+      <div>
+        <p class="hx-dialog-title" id="dlgTitle"></p>
+        <p class="hx-dialog-sub" id="dlgSub"></p>
+      </div>
+      <button class="hx-close" id="dlgClose" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="hx-dialog-body" id="dlgBody"></div>
+  </dialog>
 
 </div>
 

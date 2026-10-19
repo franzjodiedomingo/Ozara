@@ -1,5 +1,3 @@
-/* Sign-out confirmation pop-up (loaded by js/shared.js) */
-
 .signout-overlay{
   position:fixed;
   inset:0;
