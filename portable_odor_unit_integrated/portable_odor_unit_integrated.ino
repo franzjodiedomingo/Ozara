@@ -21,7 +21,7 @@ Adafruit_BME680 bme;
 #define OZONE_FAN_PIN 26
 #define CARBON_FAN_PIN 27
 #define SENSOR_FAN_PIN 32
-#define OZONE_GEN_PIN 33
+#define OZONE_GEN_PIN 33   // CHECK: other team used 19; your sketch used 33
 #define BUZZER_PIN 23
 const bool BUZZER_ACTIVE_HIGH = true;
 
@@ -31,7 +31,7 @@ const unsigned long WARMUP_MS = TEST_PHASE_MS;
 const unsigned long FAN_PRERUN_MS = TEST_PHASE_MS;
 const unsigned long SAMPLE_WINDOW_MS = TEST_PHASE_MS;
 const unsigned long SOAK_TIME_MS = TEST_PHASE_MS;
-const unsigned long PRE_TREATMENT_DELAY_MS = TEST_PHASE_MS;
+const unsigned long PRE_TREATMENT_DELAY_MS = 10000UL;
 const unsigned long PURGE_TIME_MS = TEST_PHASE_MS;
 const unsigned long SAMPLE_INTERVAL_MS = 3000UL;
 const unsigned long SENSOR_TIMEOUT_MS = 2000UL;
@@ -78,7 +78,7 @@ enum State {
   WARMUP, IDLE, BASELINE_FAN_PRERUN, BASELINE_SAMPLING,
   WAIT_FOR_CLOTHES, SOAKING, CLOTHES_FAN_PRERUN, CLOTHES_SAMPLING,
   TIME_CHOICE, AUTO_CONFIRM, SUGGEST, START_COUNTDOWN, RUNNING_PULSE, RUNNING_DISPERSE,
-  PURGING, DONE, RESULTS, SENSOR_ERROR
+  PURGING, DONE, RESULTS, SENSOR_ERROR, MANUAL_CONFIRM, MANUAL_OZONE, MANUAL_PURGE_FAN
 };
 enum SoundPriority { CLICK_SOUND, EVENT_SOUND, HOLD_SOUND, CONFIRM_SOUND };
 enum BirthdayPart { BIRTHDAY_SOUND, BIRTHDAY_GAP, BIRTHDAY_PAUSE };
@@ -93,6 +93,10 @@ long lastCueSecond = -1, selectedTimeS = 60, suggestedTimeS = 60;
 long lastStartHoldSecond=-1;
 unsigned int resultsPage=0;
 bool treatmentBegan=false;
+unsigned long configuredPurgeMs=PURGE_TIME_MS; // editable only while Ready
+unsigned long manualPurgeMs=PURGE_TIME_MS; // latched for active run
+unsigned long fanTestMs=PURGE_TIME_MS;
+bool manualOzoneCycle=false; // bounded continuous generator test, independent of sensor suggestion
 unsigned long actualTreatmentMs=0, finishedCycleMs=0;
 float pulseOnS = 10, pulseOffS = 20, combinedScore = 0;
 float baseline[3] = {0,0,0}, clothes[3] = {0,0,0}, deltas[3] = {0,0,0};
@@ -139,8 +143,13 @@ const char* confirmationTitle = "Cancelled";
 const char* confirmationDetail = "Returning to Ready";
 const char* limitNoticeText = "Minimum time";
 
+unsigned long activePurgeMs() { return manualOzoneCycle ? manualPurgeMs : PURGE_TIME_MS; }
+
 const char* stateName(State s) {
   switch (s) {
+    case MANUAL_PURGE_FAN: return "MANUAL_PURGE_FAN";
+    case MANUAL_CONFIRM: return "MANUAL_OZONE_CONFIRM";
+    case MANUAL_OZONE: return "MANUAL_OZONE_ON";
     case WARMUP: return "WARMUP";
     case IDLE: return "READY";
     case BASELINE_FAN_PRERUN: return "BASELINE_CIRCULATION";
@@ -258,7 +267,7 @@ void allOutputsOff() {
 }
 int sectionProgressWidth() {
   unsigned long elapsed = millis() - (abortProgress ? abortProgressStartedAt : sectionStartedAt);
-  unsigned long duration = abortProgress ? PURGE_TIME_MS : sectionDurationMs;
+  unsigned long duration = abortProgress ? activePurgeMs() : sectionDurationMs;
   if (elapsed > duration) elapsed = duration;
   int base = abortProgress ? abortProgressBase : 0;
   return base + (duration ? (int)(elapsed * (126UL-base) / duration) : 126-base);
@@ -273,11 +282,11 @@ void enterState(State next, bool announce = true) {
   if (next == WARMUP) beginSection(WARMUP_MS);
   if (next == BASELINE_FAN_PRERUN) beginSection(FAN_PRERUN_MS + SAMPLE_WINDOW_MS);
   if (next == SOAKING) beginSection(SOAK_TIME_MS + FAN_PRERUN_MS + SAMPLE_WINDOW_MS);
-  if (next == START_COUNTDOWN) beginSection(PRE_TREATMENT_DELAY_MS + selectedTimeS*1000UL + PURGE_TIME_MS);
+  if (next == START_COUNTDOWN) beginSection(PRE_TREATMENT_DELAY_MS + selectedTimeS*1000UL + activePurgeMs());
   displayDirty = true; limitNoticeVisible = false;
   Serial.print("STATE: "); Serial.println(stateName(next));
   switch (next) {
-    case WARMUP: case IDLE: case SENSOR_ERROR: allOutputsOff(); break;
+    case WARMUP: case IDLE: case SENSOR_ERROR: manualOzoneCycle=false; allOutputsOff(); break;
     case BASELINE_FAN_PRERUN: case CLOTHES_FAN_PRERUN:
       relayOn(SENSOR_FAN_PIN);
       if (next == CLOTHES_FAN_PRERUN && announce) interactionCue("Odor buildup complete");
@@ -290,7 +299,10 @@ void enterState(State next, bool announce = true) {
       relayOff(SENSOR_FAN_PIN);
       if (announce) interactionCue("Sampling complete");
       break;
+    case MANUAL_PURGE_FAN:
+      allOutputsOff();beginSection(fanTestMs);relayOn(CARBON_FAN_PIN);break;
     case START_COUNTDOWN: allOutputsOff(); break;
+    case MANUAL_OZONE:
     case RUNNING_PULSE:
       treatmentBegan=true;
       ozoneOverallStart = millis(); relayOn(OZONE_FAN_PIN);
@@ -316,7 +328,7 @@ void enterState(State next, bool announce = true) {
 }
 bool samplingStage(State s) { return s == BASELINE_SAMPLING || s == CLOTHES_SAMPLING; }
 bool abortStage(State s) {
-  return s == START_COUNTDOWN || s == RUNNING_PULSE || s == RUNNING_DISPERSE;
+  return s == START_COUNTDOWN || s == RUNNING_PULSE || s == RUNNING_DISPERSE || s == MANUAL_OZONE;
 }
 void configureSensor() {
   bme.setTemperatureOversampling(BME680_OS_8X); bme.setHumidityOversampling(BME680_OS_2X);
@@ -331,6 +343,7 @@ void sensorFault(const char* reason) {
   interactionCue("Sensor fault");
 }
 void startBaseline() {
+  manualOzoneCycle=false;
   if (sensorNeedsReset) {
     if (!bme.begin(0x76)) { sensorFault("Sensor not found"); return; }
     configureSensor(); sensorNeedsReset = false;
@@ -491,6 +504,7 @@ void beginCountdown() {
 }
 // Return to the first user step without restarting the ESP32.
 void returnToReady() {
+  manualOzoneCycle=false;
   allOutputsOff();silenceBuzzer();
   for(int i=0;i<3;i++) sampleSums[i]=baseline[i]=clothes[i]=deltas[i]=0;
   sampleCount=0;combinedScore=0;selectedTimeS=suggestedTimeS=MIN_TIME_S;
@@ -504,6 +518,14 @@ void handleButtons() {
   unsigned long now=millis();
   if (stableButton[0] == HIGH && startConsumed) {
     startConsumed = false; startTracking = false; startHoldActive = false;
+  }
+  if(state==MANUAL_PURGE_FAN && buttonPress[0]) {
+    returnToReady();startConsumed=true;startTracking=false;return;
+  }
+  if (manualOzoneCycle && (state==START_COUNTDOWN || state==MANUAL_OZONE) && buttonPress[0]) {
+    cycleAborted=true;startConsumed=true;startTracking=false;
+    cancelHoldActive=false;plusTracking=false;
+    enterState(PURGING);return;
   }
   if (startHoldActive && (buttonPress[1] || buttonPress[2])) {
     clearSounds();startHoldActive = false; startTracking = false; startConsumed = true; displayDirty = true;
@@ -583,7 +605,7 @@ void handleButtons() {
   if (startConsumed) return;
   if (buttonPress[0]) {
     startTracking=true; startTapState=state; startHeldSince=now;
-    if (state==SUGGEST || state==AUTO_CONFIRM || state==RESULTS) {
+    if (state==SUGGEST || state==AUTO_CONFIRM || state==MANUAL_CONFIRM || state==RESULTS) {
       startHoldActive=true;displayDirty=true;
       clearSounds();lastStartHoldSecond=3;countdownBeep(true);
     }
@@ -618,6 +640,9 @@ void handleButtons() {
 void updateCycle() {
   unsigned long now=millis(), elapsed=now-phaseStartTime;
   switch (state) {
+    case MANUAL_PURGE_FAN:
+      if(elapsed>=fanTestMs) returnToReady();
+      break;
     case WARMUP:
       if (elapsed>=WARMUP_MS) {
         enterState(IDLE);readyAnnouncement=true;
@@ -647,7 +672,11 @@ void updateCycle() {
       break;
     case START_COUNTDOWN:
       final321(remainingSeconds(PRE_TREATMENT_DELAY_MS,phaseStartTime));
-      if(elapsed>=PRE_TREATMENT_DELAY_MS) enterState(RUNNING_PULSE);
+      if(elapsed>=PRE_TREATMENT_DELAY_MS) enterState(manualOzoneCycle ? MANUAL_OZONE : RUNNING_PULSE);
+      break;
+    case MANUAL_OZONE:
+      final321(remainingSeconds(selectedTimeS*1000UL,ozoneOverallStart));
+      if(now-ozoneOverallStart>=selectedTimeS*1000UL) enterState(PURGING);
       break;
     case RUNNING_PULSE: {
       unsigned long overall=now-ozoneOverallStart;
@@ -668,12 +697,12 @@ void updateCycle() {
       break;
     }
     case PURGING: {
-      long left=remainingSeconds(PURGE_TIME_MS,phaseStartTime);
+      long left=remainingSeconds(activePurgeMs(),phaseStartTime);
       if(left!=lastCueSecond) {
         lastCueSecond=left;
         if(left>=1 && left<=3) countdownBeep();
       }
-      if(elapsed>=PURGE_TIME_MS) enterState(DONE);
+      if(elapsed>=activePurgeMs()) enterState(DONE);
       break;
     }
     default: break;
@@ -749,6 +778,9 @@ void drawTimer(const char* title, unsigned long duration, unsigned long start,
 const char* panelPhase() {
   switch(state) {
     case WARMUP:return "Warmup";
+    case MANUAL_PURGE_FAN:return "Purge fan test";
+    case MANUAL_CONFIRM:return "Manual confirm";
+    case MANUAL_OZONE:return "Manual ozone";
     case IDLE:return "Ready";
     case BASELINE_FAN_PRERUN:case BASELINE_SAMPLING:return "Baseline";
     case WAIT_FOR_CLOTHES:return "Load clothes";
@@ -772,9 +804,10 @@ long panelTimeLeft() {
       return remainingSeconds(SAMPLE_WINDOW_MS,phaseStartTime);
     case SOAKING:return remainingSeconds(SOAK_TIME_MS,phaseStartTime);
     case START_COUNTDOWN:return remainingSeconds(PRE_TREATMENT_DELAY_MS,phaseStartTime);
-    case RUNNING_PULSE:case RUNNING_DISPERSE:
+    case MANUAL_OZONE:case RUNNING_PULSE:case RUNNING_DISPERSE:
       return remainingSeconds(selectedTimeS*1000UL,ozoneOverallStart);
-    case PURGING:return remainingSeconds(PURGE_TIME_MS,phaseStartTime);
+    case MANUAL_PURGE_FAN:return remainingSeconds(fanTestMs,phaseStartTime);
+    case PURGING:return remainingSeconds(activePurgeMs(),phaseStartTime);
     case DONE:return 0;
     default:return -1;
   }
@@ -903,6 +936,13 @@ void renderDisplay() {
     switch(state) {
       case WARMUP:
         drawTimer("Sensor warmup",WARMUP_MS,phaseStartTime,"Please wait...");break;
+      case MANUAL_PURGE_FAN:
+        drawTimer("Purge fan test",fanTestMs,phaseStartTime,"OK: Stop fan");break;
+      case MANUAL_CONFIRM:
+        screenTitle("Manual ozone");screenTime(selectedTimeS);
+        screenAction("Hold OK 3s to start");break;
+      case MANUAL_OZONE:
+        drawTimer("Manual ozone ON",selectedTimeS*1000UL,ozoneOverallStart,"OK: OFF + purge",true);break;
       case IDLE:
         screenTitle("Ready");
         display.setCursor(0,16);display.print("Empty; close the door");
@@ -948,7 +988,7 @@ void renderDisplay() {
       case RUNNING_DISPERSE:
         drawTimer("Air circulation",selectedTimeS*1000UL,ozoneOverallStart,"Generator OFF",true);break;
       case PURGING:
-        drawTimer("Purging",PURGE_TIME_MS,phaseStartTime,"Cannot cancel purge");break;
+        drawTimer("Purging",activePurgeMs(),phaseStartTime,"Cannot cancel purge");break;
       case DONE: case RESULTS: break; // Drawn above the normal panels.
       case SENSOR_ERROR:
         screenTitle("Sensor fault");

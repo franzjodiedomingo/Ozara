@@ -8,14 +8,14 @@
 
 // Physical buttons take priority. Browser holds require a renewable lease.
 WebServer webServer(80);
-const char* AP_NAME = "OdorRemovalUnit";
-const char* AP_PASSWORD = "Admin@123"; // Change before use (at least 8 characters).
+const char* AP_NAME = "OZARA Treatment Unit";
+const char* AP_PASSWORD = "ChangeMe4826"; // Change before use (at least 8 characters).
 const unsigned long WEB_LEASE_MS = 700;
 int webButtonIndex = -1;
 unsigned long webButtonUpdatedAt = 0;
 String webOwner, webToken;
 bool webStarted = false;
-#include "wifi_setup.h"   // saved internet Wi-Fi + /wifi setup page (needs webServer, webToken above)
+#include "wifi_setup.h"   // saved Wi-Fi for Firebase; needs webServer + webToken above
 bool physicalButtonActive() {
   for (int i=0;i<3;i++) if (digitalRead(BUTTON_PINS[i]) == LOW) return true;
   return false;
@@ -48,6 +48,9 @@ const char* webInstruction() {
   if (state==PURGING) return "Purge in progress. Cancellation is blocked. Test timing does not verify clearance.";
   if (readyAnnouncement || confirmationVisible) return "Please wait for the current confirmation or announcement.";
   switch(state) {
+    case MANUAL_PURGE_FAN: return "Standalone purge-fan test. Ozone is OFF. OK or Stop fan ends this test.";
+    case MANUAL_CONFIRM: return "Manual continuous ozone: hold OK for 3 seconds to start countdown. OFF cancels.";
+    case MANUAL_OZONE: return "Manual ozone ON. Timer is enforced by ESP32. Tap OK or OFF to stop and purge.";
     case IDLE: return "With the unit installed in an empty cabinet, tap OK to sample baseline air.";
     case WAIT_FOR_CLOTHES: return "Load clothes and close the cabinet door, then tap OK.";
     case TIME_CHOICE: return "Tap OK for suggested duration or minus for manual duration.";
@@ -66,8 +69,9 @@ long webRemaining() {
     case BASELINE_SAMPLING: case CLOTHES_SAMPLING: return remainingSeconds(SAMPLE_WINDOW_MS,phaseStartTime);
     case SOAKING: return remainingSeconds(SOAK_TIME_MS,phaseStartTime);
     case START_COUNTDOWN: return remainingSeconds(PRE_TREATMENT_DELAY_MS,phaseStartTime);
-    case RUNNING_PULSE: case RUNNING_DISPERSE: return remainingSeconds(selectedTimeS*1000UL,ozoneOverallStart);
-    case PURGING: return remainingSeconds(PURGE_TIME_MS,phaseStartTime);
+    case MANUAL_OZONE: case RUNNING_PULSE: case RUNNING_DISPERSE: return remainingSeconds(selectedTimeS*1000UL,ozoneOverallStart);
+    case MANUAL_PURGE_FAN: return remainingSeconds(fanTestMs,phaseStartTime);
+    case PURGING: return remainingSeconds(activePurgeMs(),phaseStartTime);
     default: return -1;
   }
 }
@@ -92,6 +96,10 @@ void serveStatus() {
   out+=",\"temperature\":";out+=valid ? String(liveTemperatureC,2) : String("null");
   out+=",\"humidity\":";out+=valid ? String(liveHumidityRH,2) : String("null");
   out+=",\"readingAt\":";out+=String(lastReadingAt);
+  out+=",\"configuredPurgeSeconds\":";out+=String(configuredPurgeMs/1000UL);
+  out+=",\"fanTestSeconds\":";out+=String(fanTestMs/1000UL);
+  out+=",\"purgeSeconds\":";out+=String(activePurgeMs()/1000UL);
+  out+=",\"manualOzone\":";out+=manualOzoneCycle?"true":"false";
   out+=",\"ozone\":";out+=ozoneIsOn?"true":"false";
   out+=",\"fan\":";out+=digitalRead(OZONE_FAN_PIN)==LOW?"true":"false";
   out+=",\"purgeFan\":";out+=digitalRead(CARBON_FAN_PIN)==LOW?"true":"false";
@@ -138,6 +146,76 @@ void serveButton() {
   webOwner=client;webButtonIndex=index;webButtonUpdatedAt=millis();
   webServer.send(200,"text/plain","Held");
 }
+// Manual ozone is bounded, starts only from Ready, and cannot override purge.
+void serveManualOzone() {
+  if(webServer.arg("token")!=webToken) {webServer.send(403,"text/plain","Invalid token; reload dashboard");return;}
+  String action=webServer.arg("action");
+  if(action=="off") {
+    if(manualOzoneCycle && (state==START_COUNTDOWN || state==MANUAL_OZONE)) {
+      cycleAborted=true;startHoldActive=false;startTracking=false;startConsumed=true;
+      cancelHoldActive=false;plusTracking=false;confirmationVisible=false;
+      clearSounds();enterState(PURGING);
+    } else if(state==MANUAL_CONFIRM) {
+      startHoldActive=false;startTracking=false;startConsumed=true;
+      returnToReady();
+    } else if(state!=IDLE && state!=PURGING && state!=DONE && state!=RESULTS) {
+      webServer.send(409,"text/plain","Manual OFF is for manual mode; use the cycle abort control");return;
+    }
+    // Repeated OFF during purge is idempotent: never restarts or skips purge.
+    webServer.send(200,"text/plain","Manual ozone off; any required purge continues");return;
+  }
+  if(action!="prepare") {webServer.send(400,"text/plain","Unknown action");return;}
+  String value=webServer.arg("seconds");
+  if(value.length()==0 || value.length()>4) {webServer.send(400,"text/plain","Use 1-1800 whole seconds");return;}
+  for(unsigned int i=0;i<value.length();i++) if(value[i]<'0'||value[i]>'9') {
+    webServer.send(400,"text/plain","Use 1-1800 whole seconds");return;
+  }
+  long seconds=value.toInt();
+  if(seconds<1 || seconds>1800) {webServer.send(400,"text/plain","Use 1-1800 whole seconds");return;}
+  if(state!=IDLE || readyAnnouncement || confirmationVisible || sensorNeedsReset ||
+     physicalButtonActive() || webButtonIndex>=0) {
+    webServer.send(409,"text/plain","Return to Ready and release all buttons first");return;
+  }
+  for(int i=0;i<3;i++) if(rawButton[i]==LOW || stableButton[i]==LOW) {
+    webServer.send(409,"text/plain","Wait for button release");return;
+  }
+  returnToReady(); // clears previous samples/results and never energizes a relay
+  manualOzoneCycle=true;manualPurgeMs=configuredPurgeMs;selectedTimeS=seconds;detailedView=false;
+  enterState(MANUAL_CONFIRM,false);
+  webServer.send(200,"text/plain","Duration set. Hold OK for 3 seconds to start the countdown");
+}
+
+// Independent fan test cannot interrupt or shorten post-ozone purging.
+void servePurgeControl() {
+  if(webServer.arg("token")!=webToken) {webServer.send(403,"text/plain","Invalid token; reload dashboard");return;}
+  String action=webServer.arg("action");
+  if(action=="stop") {
+    if(state==MANUAL_PURGE_FAN) {returnToReady();webServer.send(200,"text/plain","Fan test stopped");return;}
+    if(state==IDLE) {webServer.send(200,"text/plain","Fan already stopped");return;}
+    webServer.send(409,"text/plain","Cannot stop a required purge or interrupt a cycle");return;
+  }
+  if(action!="set" && action!="start") {webServer.send(400,"text/plain","Unknown action");return;}
+  String value=webServer.arg("seconds");
+  if(value.length()==0 || value.length()>4) {webServer.send(400,"text/plain","Use 20-3600 whole seconds");return;}
+  for(unsigned int i=0;i<value.length();i++) if(value[i]<'0'||value[i]>'9') {
+    webServer.send(400,"text/plain","Use 20-3600 whole seconds");return;
+  }
+  long seconds=value.toInt();
+  if(seconds<20 || seconds>3600) {webServer.send(400,"text/plain","Use 20-3600 whole seconds");return;}
+  if(state!=IDLE || readyAnnouncement || confirmationVisible || physicalButtonActive() || webButtonIndex>=0) {
+    webServer.send(409,"text/plain","Return to Ready and release buttons first");return;
+  }
+  for(int i=0;i<3;i++) if(rawButton[i]==LOW || stableButton[i]==LOW) {
+    webServer.send(409,"text/plain","Wait for button release");return;
+  }
+  if(action=="set") {
+    configuredPurgeMs=seconds*1000UL;
+    webServer.send(200,"text/plain","Post-ozone purge duration applied for the next manual ozone run");return;
+  }
+  returnToReady();fanTestMs=seconds*1000UL;enterState(MANUAL_PURGE_FAN,false);
+  webServer.send(200,"text/plain","Purge fan test started with the requested duration");
+}
+
 void serveCSV() {
   // Bound response size; no writes to flash and no network dependency in cycle logic.
   String csv;csv.reserve(logCount*130+200);
@@ -155,21 +233,24 @@ void serveCSV() {
 }
 void startWebsite() {
   webToken=String(esp_random(),HEX)+String(esp_random(),HEX);
-  WiFi.persistent(false);                       // we store the network ourselves (wifi_setup.h)
-  WiFi.mode(WIFI_AP_STA);                       // AP (local dashboard) + STA (internet for Firebase)
+  // AP + STA: the unit keeps its own Wi-Fi (local dashboard, /wifi setup page) AND
+  // joins the saved internet Wi-Fi so firebase_sync.h can reach Firebase.
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.persistent(false);
   if(!WiFi.softAP(AP_NAME,AP_PASSWORD)) {Serial.println("WEB: Access point failed; physical controls continue");return;}
-  wifiConnectSaved();                           // non-blocking: connects to the saved Wi-Fi, if any
+  wifiConnectSaved();   // non-blocking; reconnects by itself after power cuts / drops
   webServer.on("/",HTTP_GET,[](){
     String page=FPSTR(DASHBOARD_HTML);page.replace("__TOKEN__",webToken);
     webServer.sendHeader("Cache-Control","no-store");webServer.send(200,"text/html",page);
   });
   webServer.on("/api/status",HTTP_GET,serveStatus);
   webServer.on("/api/button",HTTP_POST,serveButton);
+  webServer.on("/api/ozone",HTTP_POST,serveManualOzone);
+  webServer.on("/api/purge",HTTP_POST,servePurgeControl);
   webServer.on("/api/readings.csv",HTTP_GET,serveCSV);
-  registerWifiRoutes();                         // /wifi setup page
+  registerWifiRoutes();
   webServer.onNotFound([](){webServer.send(404,"text/plain","Not found");});
   webServer.begin();webStarted=true;
   Serial.print("WEB: Connect to ");Serial.println(AP_NAME);
   Serial.print("WEB: Open http://");Serial.println(WiFi.softAPIP());
-  Serial.println("WEB: Internet Wi-Fi is set up at /wifi (connects in the background)");
 }
