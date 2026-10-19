@@ -1,17 +1,11 @@
-// js/home.js — Home page: device/door/sensor status, the
-// Set timer -> choose duration -> Start cycle flow, and the
-// running-cycle / Cancel cycle state.
+// js/home.js — Home page: device/door/sensor status and the live running-cycle
+// countdown. The cycle itself is controlled with the Remote controls card
+// (js/remote.js), which mirrors the unit's OK / - / + buttons.
 
 import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
-import { ref, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+import { ref, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { createPresence } from "./presence.js";
-
-// The unit's cycle is driven by its own buttons (baseline, load clothes, timer,
-// start). The current firmware does not listen to commands/startCycle or
-// commands/cancelCycle, so the dashboard only MONITORS for now. Turn this on
-// once the firmware reads those commands.
-const REMOTE_START_ENABLED = false;
 
 const DEVICE_ID = "device1";
 
@@ -34,49 +28,17 @@ const els = {
   statusBme680: document.getElementById("statusBme680"),
   lcdNote: document.getElementById("lcdNote"),
 
-  // Timer flow
-  setTimerBtn: document.getElementById("setTimerBtn"),
-  timerChoicePanel: document.getElementById("timerChoicePanel"),
-  cancelFromChoiceBtn: document.getElementById("cancelFromChoiceBtn"),
-  chooseSuggestedBtn: document.getElementById("chooseSuggestedBtn"),
-  chooseManualBtn: document.getElementById("chooseManualBtn"),
-  suggestedPanel: document.getElementById("suggestedPanel"),
-  suggestedTable: document.getElementById("suggestedTable"),
-  backFromSuggestedBtn: document.getElementById("backFromSuggestedBtn"),
-  cancelFromSuggestedBtn: document.getElementById("cancelFromSuggestedBtn"),
-  manualPanel: document.getElementById("manualPanel"),
-  manualMinutes: document.getElementById("manualMinutes"),
-  confirmManualBtn: document.getElementById("confirmManualBtn"),
-  backFromManualBtn: document.getElementById("backFromManualBtn"),
-  cancelFromManualBtn: document.getElementById("cancelFromManualBtn"),
-  readyPanel: document.getElementById("readyPanel"),
-  chosenMinutes: document.getElementById("chosenMinutes"),
-  startCycleBtn: document.getElementById("startCycleBtn"),
-  changeTimerBtn: document.getElementById("changeTimerBtn"),
-  cancelFromReadyBtn: document.getElementById("cancelFromReadyBtn"),
-
   // Running state
   runningPanel: document.getElementById("runningPanel"),
   runningSub: document.getElementById("runningSub"),
-  runningMinutesLeft: document.getElementById("runningMinutesLeft"),
-  cancelRunningBtn: document.getElementById("cancelRunningBtn")
+  runningMinutesLeft: document.getElementById("runningMinutesLeft")
 };
-
-const ALL_PANELS = [
-  els.setTimerBtn,
-  els.timerChoicePanel,
-  els.suggestedPanel,
-  els.manualPanel,
-  els.readyPanel,
-  els.runningPanel
-];
 
 let latestStatus = null;
 let rawStatus = null;
 let lastPresence = null;
 const presence = createPresence(); // is the ESP32 still sending? (status.lastSeen changes every push)
 let isSafe = false;
-let selectedMinutes = null;
 let countdownTimer = null;
 
 requireAuth().then(() => {
@@ -130,6 +92,7 @@ function updateHomeStatus(status) {
   }
 
   stopCountdown();
+  els.runningPanel.hidden = true;
 
   if (!status) {
     setBanner("unknown", "Checking status…", "No status data yet from the device.", "•");
@@ -199,15 +162,12 @@ function setStatusItem(el, ok, label) {
   el.className = `status-item-value ${ok === null ? "unknown" : ok ? "ok" : "bad"}`;
 }
 
-// Gates the whole "Set timer" flow on whether it's currently safe to run
-// a cycle. Going unsafe mid-flow (e.g. door opened while picking a time)
-// snaps the UI back to the disabled button.
+// Remembers whether it is currently safe to run a cycle and shows the note
+// under the status cards. The Remote controls card is always available; the
+// unit itself refuses presses it can't act on.
 function setGate(safe, note) {
   isSafe = safe;
-  const canStart = safe && REMOTE_START_ENABLED;
-  els.setTimerBtn.disabled = !canStart;
-  els.setTimerBtn.textContent = canStart ? "Set timer" : "Set timer — disabled";
-  if (safe && !REMOTE_START_ENABLED) note = "Unit is ready. Start the cycle with the buttons on the unit.";
+  if (safe) note = "Unit is ready. Use the Remote controls below, or the buttons on the unit.";
 
   if (note) {
     els.lcdNote.textContent = note;
@@ -215,93 +175,15 @@ function setGate(safe, note) {
   } else {
     els.lcdNote.hidden = true;
   }
-
-  if (!canStart) resetTimerFlow();
 }
-
-// --- Timer flow: Set timer -> (Suggested | Manual) -> Ready -> Start cycle ---
-
-function showPanel(panel) {
-  ALL_PANELS.forEach((p) => (p.hidden = p !== panel));
-}
-
-function resetTimerFlow() {
-  selectedMinutes = null;
-  els.manualMinutes.value = "";
-  showPanel(els.setTimerBtn);
-}
-
-els.setTimerBtn.addEventListener("click", () => {
-  if (els.setTimerBtn.disabled) return;
-  showPanel(els.timerChoicePanel);
-});
-
-els.chooseSuggestedBtn.addEventListener("click", () => showPanel(els.suggestedPanel));
-els.chooseManualBtn.addEventListener("click", () => showPanel(els.manualPanel));
-els.backFromSuggestedBtn.addEventListener("click", () => showPanel(els.timerChoicePanel));
-els.backFromManualBtn.addEventListener("click", () => showPanel(els.timerChoicePanel));
-els.changeTimerBtn.addEventListener("click", () => showPanel(els.timerChoicePanel));
-
-// Cancel, from any step of the timer-setup flow, fully exits back to
-// the initial "Set timer" button (distinct from "Back", which only
-// goes up one step).
-[els.cancelFromChoiceBtn, els.cancelFromSuggestedBtn, els.cancelFromManualBtn, els.cancelFromReadyBtn].forEach((btn) =>
-  btn.addEventListener("click", resetTimerFlow)
-);
-
-els.suggestedTable.addEventListener("click", (e) => {
-  const row = e.target.closest(".suggested-row");
-  if (!row) return;
-  selectDuration(Number(row.dataset.minutes));
-});
-
-els.confirmManualBtn.addEventListener("click", () => {
-  const minutes = Number(els.manualMinutes.value);
-  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 120) {
-    els.manualMinutes.focus();
-    return;
-  }
-  selectDuration(Math.round(minutes));
-});
-
-function selectDuration(minutes) {
-  selectedMinutes = minutes;
-  els.chosenMinutes.textContent = minutes;
-  showPanel(els.readyPanel);
-}
-
-els.startCycleBtn.addEventListener("click", async () => {
-  if (!isSafe || !selectedMinutes) return;
-  els.startCycleBtn.disabled = true;
-  els.startCycleBtn.textContent = "Starting…";
-  try {
-    // durationMinutes is what the ESP32 reads; durationSeconds is what the
-    // Monitor page reads to build its purge session window.
-    await set(ref(db, `devices/${DEVICE_ID}/commands/startCycle`), {
-      durationMinutes: selectedMinutes,
-      durationSeconds: selectedMinutes * 60,
-      requestedAt: serverTimestamp()
-    });
-    window.location.href = "monitor.html";
-  } catch (err) {
-    console.error(err);
-  } finally {
-    els.startCycleBtn.disabled = false;
-    els.startCycleBtn.textContent = "Start cycle";
-  }
-});
 
 // --- Running state ---
 //
-// Expects the ESP32 to write, once it actually starts:
-//   devices/{id}/status/cycleRunning = true
-//   devices/{id}/status/cycleStartedAt = <server timestamp, ms>
-//   devices/{id}/status/cycleDurationMinutes = <number>
-// and to set cycleRunning back to false when it finishes on its own.
+// The unit reports status.cycleRunning and status.cycleRemainingSeconds; this
+// panel just shows that countdown live.
 
 function showRunning(status) {
-  showPanel(els.runningPanel);
-  els.cancelRunningBtn.hidden = !REMOTE_START_ENABLED;
+  els.runningPanel.hidden = false;
 
   stopCountdown();
 
@@ -344,22 +226,3 @@ function stopCountdown() {
   }
 }
 
-els.cancelRunningBtn.addEventListener("click", async () => {
-  const confirmed = window.confirm("Cancel the running cycle?");
-  if (!confirmed) return;
-
-  els.cancelRunningBtn.disabled = true;
-  els.cancelRunningBtn.textContent = "Cancelling…";
-  try {
-    await set(ref(db, `devices/${DEVICE_ID}/commands/cancelCycle`), {
-      requestedAt: serverTimestamp()
-    });
-    // The ESP32 should stop and set status.cycleRunning = false, which
-    // the listener above will pick up and return the UI to normal.
-  } catch (err) {
-    console.error(err);
-  } finally {
-    els.cancelRunningBtn.disabled = false;
-    els.cancelRunningBtn.textContent = "Cancel cycle";
-  }
-});

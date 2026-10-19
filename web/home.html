@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dashboard.css">
+<link rel="stylesheet" href="css/remote.css">
 </head>
 <body>
 
@@ -143,97 +144,47 @@
       </div>
     </section>
 
-    <button class="start-cycle-btn" id="setTimerBtn" disabled>Set timer — disabled</button>
     <p class="lcd-note" id="lcdNote" hidden></p>
 
-    <!-- Step 1: choose how to set the duration -->
-    <section class="card timer-panel" id="timerChoicePanel" hidden>
-      <div class="card-header">
-        <p class="card-title">Choose cycle duration</p>
-        <button class="link-btn link-btn-muted" id="cancelFromChoiceBtn">Cancel</button>
-      </div>
-      <p class="timer-sub">How long should this sanitization cycle run?</p>
-      <div class="timer-choice-row">
-        <button class="timer-choice-btn" id="chooseSuggestedBtn">
-          <span class="timer-choice-title">Suggested time</span>
-          <span class="timer-choice-sub">Recommended durations from Ozara</span>
-        </button>
-        <button class="timer-choice-btn" id="chooseManualBtn">
-          <span class="timer-choice-title">Manual setup</span>
-          <span class="timer-choice-sub">Set your own duration</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Step 2a: suggested-time table -->
-    <section class="card timer-panel" id="suggestedPanel" hidden>
-      <div class="card-header">
-        <p class="card-title">Suggested time</p>
-        <div class="header-actions">
-          <button class="link-btn" id="backFromSuggestedBtn">Back</button>
-          <button class="link-btn link-btn-muted" id="cancelFromSuggestedBtn">Cancel</button>
+    <!-- Remote controls: mirror the three physical buttons on the unit -->
+    <section class="card remote-card" id="remoteCard" aria-label="Remote controls">
+      <div class="rc-head">
+        <span class="rc-head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="15" cy="6" r="2" fill="#fff"/><circle cx="9" cy="12" r="2" fill="#fff"/><circle cx="13" cy="18" r="2" fill="#fff"/></svg>
+        </span>
+        <div class="rc-head-text">
+          <p class="rc-title">Controls</p>
+          <p class="rc-sub">Control the unit remotely. The physical buttons always take priority.</p>
         </div>
+        <span class="rc-pill" id="remoteBadge">Offline</span>
       </div>
-      <div class="suggested-table" id="suggestedTable">
-        <button class="suggested-row" data-minutes="10">
-          <span>
-            <span class="suggested-name">Quick refresh</span>
-            <span class="suggested-desc">Light odor, everyday wear</span>
-          </span>
-          <span class="suggested-time">10 min</span>
+      <p class="remote-hint" id="remoteHint">Waiting for the unit…</p>
+      <div class="remote-pad">
+        <button class="rc-btn rc-back" type="button" data-key="1" aria-label="Minus button: back or switch view">
+          <span class="rc-fill" aria-hidden="true"></span>
+          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></span>
+          <span class="rc-text"><b>Back / View</b><small>Goes back a step or switches the results view.</small></span>
         </button>
-        <button class="suggested-row" data-minutes="20">
-          <span>
-            <span class="suggested-name">Standard cycle</span>
-            <span class="suggested-desc">Typical gym or outdoor use</span>
-          </span>
-          <span class="suggested-time">20 min</span>
+        <button class="rc-btn rc-ok" type="button" data-key="0" aria-label="OK button">
+          <span class="rc-fill" aria-hidden="true"></span>
+          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9"/></svg></span>
+          <span class="rc-text"><b>OK / Confirm</b><small>Tap to select. Hold 3 s to confirm the cycle.</small></span>
         </button>
-        <button class="suggested-row" data-minutes="35">
-          <span>
-            <span class="suggested-name">Deep sanitize</span>
-            <span class="suggested-desc">Heavy odor or damp fabric</span>
-          </span>
-          <span class="suggested-time">35 min</span>
+        <button class="rc-btn rc-plus" type="button" data-key="2" aria-label="Plus button">
+          <span class="rc-fill" aria-hidden="true"></span>
+          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></span>
+          <span class="rc-text"><b>Increase / Cancel</b><small>Tap to increase. Hold 6 s to cancel the cycle.</small></span>
         </button>
       </div>
+      <p class="remote-status" id="remoteStatus" role="status" aria-live="polite"></p>
     </section>
 
-    <!-- Step 2b: manual setup -->
-    <section class="card timer-panel" id="manualPanel" hidden>
-      <div class="card-header">
-        <p class="card-title">Manual setup</p>
-        <div class="header-actions">
-          <button class="link-btn" id="backFromManualBtn">Back</button>
-          <button class="link-btn link-btn-muted" id="cancelFromManualBtn">Cancel</button>
-        </div>
-      </div>
-      <label for="manualMinutes" class="timer-sub" style="display:block; margin-bottom:8px;">Duration (minutes)</label>
-      <div class="manual-row">
-        <input type="number" id="manualMinutes" min="1" max="120" step="1" placeholder="e.g. 15">
-        <button class="submit-small" id="confirmManualBtn">Confirm</button>
-      </div>
-    </section>
-
-    <!-- Step 3: ready to start -->
-    <section class="card timer-panel" id="readyPanel" hidden>
-      <div class="card-header">
-        <p class="card-title">Timer set</p>
-        <div class="header-actions">
-          <button class="link-btn" id="changeTimerBtn">Change</button>
-          <button class="link-btn link-btn-muted" id="cancelFromReadyBtn">Cancel</button>
-        </div>
-      </div>
-      <p class="duration-display"><span id="chosenMinutes">—</span> <span class="duration-unit">minutes</span></p>
-      <button class="start-cycle-btn" id="startCycleBtn">Start cycle</button>
-    </section>
-
-    <!-- Step 4: cycle actively running -->
+    <!-- Cycle actively running (live countdown from the unit) -->
     <section class="card timer-panel running-panel" id="runningPanel" hidden>
       <p class="card-title" style="margin-bottom:4px;">Cycle running</p>
       <p class="timer-sub" id="runningSub">Sanitization in progress…</p>
       <p class="duration-display"><span id="runningMinutesLeft">—</span> <span class="duration-unit">minutes left</span></p>
-      <button class="cancel-cycle-btn" id="cancelRunningBtn">Cancel cycle</button>
+      <p class="timer-sub">To cancel, hold the + button for 6 seconds. Cancelling is blocked during the final purge.</p>
     </section>
 
   </main>
@@ -243,6 +194,7 @@
 <p class="version">Ozara v1.0 · ESP32 IoT</p>
 
 <script type="module" src="js/home.js"></script>
+<script type="module" src="js/remote.js"></script>
 
 <script type="module" src="js/layout.js"></script>
 </body>

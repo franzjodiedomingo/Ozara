@@ -6,17 +6,17 @@
 //   devices/{id}/readings  historical telemetry data points (updated every ~10s)
 //   devices/{id}/status    device readiness, door state, and cycle status
 //   devices/{id}/history   completed session history records
+// Cycle controls (OK, -, +) live on the Home page.
 
 import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
-import { ref, query, limitToLast, onValue, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+import { ref, query, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { createPresence } from "./presence.js";
 import { numberRuns, summaryHtml } from "./summary.js";
 
 const DEVICE_ID = "device1";
 const CHART_POINTS = 60;
 const LOG_ROWS = 10;
-const CHECK_DURATION_SEC = 600;
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -33,7 +33,6 @@ const els = {
   sessionBadge: $("sessionBadge"),
   sessionProgress: $("sessionProgress"),
   sessionProgressBar: $("sessionProgressBar"),
-  startCheckBtn: $("startCheckBtn"),
   goHomeLink: $("goHomeLink"),
   // Sensor readings
   bme: $("bmeValue"),
@@ -58,7 +57,6 @@ let live = null;
 let status = null;
 let readings = [];
 let historyList = [];
-let checkCmd = null;
 let chart = null;
 let lastReadingsKey = "";
 
@@ -85,13 +83,7 @@ requireAuth().then(() => {
     renderLive();
   }, onErr);
 
-  // 3. Command listener for air checks
-  onValue(ref(db, `${base}/commands/startCheck`), (snap) => {
-    checkCmd = snap.exists() ? snap.val() : null;
-    renderLive();
-  }, onErr);
-
-  // 4. Time-series real readings
+  // 3. Time-series real readings
   onValue(query(ref(db, `${base}/readings`), limitToLast(CHART_POINTS)), (snap) => {
     const list = [];
     snap.forEach((child) => { list.push(child.val()); });
@@ -99,7 +91,7 @@ requireAuth().then(() => {
     renderReadings();
   }, onErr);
 
-  // 5. Completed history records
+  // 4. Completed history records
   onValue(query(ref(db, `${base}/history`), limitToLast(50)), (snap) => {
     const list = [];
     snap.forEach((child) => { list.push(child.val()); });
@@ -109,24 +101,6 @@ requireAuth().then(() => {
 
   // Periodic ticker to check presence & count down time accurately
   setInterval(renderLive, 1000);
-});
-
-// ---------- Start check button handler ----------
-
-els.startCheckBtn.addEventListener("click", async () => {
-  els.startCheckBtn.disabled = true;
-  els.startCheckBtn.textContent = "Requesting check…";
-  try {
-    await set(ref(db, `devices/${DEVICE_ID}/commands/startCheck`), {
-      durationSeconds: CHECK_DURATION_SEC,
-      requestedAt: serverTimestamp()
-    });
-  } catch (err) {
-    console.error("Failed to request check:", err);
-  } finally {
-    els.startCheckBtn.disabled = false;
-    els.startCheckBtn.textContent = "Start cabinet air check";
-  }
 });
 
 // ---------- Rendering ----------
