@@ -61,7 +61,7 @@
 <div class="app-layout">
 
   <nav class="sidebar" aria-label="Main navigation">
-  <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="images/ozara-logo.png" alt="Ozara"></a>
+  <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="images/ozara-logo-white.png" alt="Ozara"></a>
   <div class="side-nav">
     <a class="nav-btn active" href="home.html" aria-current="page">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
@@ -78,6 +78,10 @@
     <a class="nav-btn" href="profile.html">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
       <span>Profile</span>
+    </a>
+    <a class="nav-btn" href="manual.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+      <span class="lbl-full">User Manual</span><span class="lbl-short">Manual</span>
     </a>
   </div>
   <div class="side-bottom">
@@ -160,20 +164,32 @@
       </div>
       <p class="remote-hint" id="remoteHint">Waiting for the unit…</p>
       <div class="remote-pad">
-        <button class="rc-btn rc-back" type="button" data-key="1" aria-label="Minus button: back or switch view">
-          <span class="rc-fill" aria-hidden="true"></span>
-          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></span>
-          <span class="rc-text"><b>Back / View</b><small>Goes back a step or switches the results view.</small></span>
-        </button>
         <button class="rc-btn rc-ok" type="button" data-key="0" aria-label="OK button">
           <span class="rc-fill" aria-hidden="true"></span>
-          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9"/></svg></span>
-          <span class="rc-text"><b>OK / Confirm</b><small>Tap to select. Hold 3 s to confirm the cycle.</small></span>
+          <span class="rc-top">
+            <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9"/></svg></span>
+            <b class="rc-name">OK</b>
+          </span>
+          <span class="rc-desc"><strong>Tap:</strong> select<br><strong>Hold 3s:</strong> confirm</span>
+          <span class="rc-tag"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/></svg>Confirm / Proceed</span>
+        </button>
+        <button class="rc-btn rc-back" type="button" data-key="1" aria-label="Minus button">
+          <span class="rc-fill" aria-hidden="true"></span>
+          <span class="rc-top">
+            <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></span>
+            <b class="rc-name">Decrease</b>
+          </span>
+          <span class="rc-desc"><strong>Tap:</strong> reduce / switch view</span>
+          <span class="rc-tag"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>Decrease / Navigate</span>
         </button>
         <button class="rc-btn rc-plus" type="button" data-key="2" aria-label="Plus button">
           <span class="rc-fill" aria-hidden="true"></span>
-          <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></span>
-          <span class="rc-text"><b>Increase / Cancel</b><small>Tap to increase. Hold 6 s to cancel the cycle.</small></span>
+          <span class="rc-top">
+            <span class="rc-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></span>
+            <b class="rc-name">Increase</b>
+          </span>
+          <span class="rc-desc"><strong>Tap:</strong> increase<br><strong>Hold 6s:</strong> cancel</span>
+          <span class="rc-tag"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Increase / Cancel</span>
         </button>
       </div>
       <p class="remote-status" id="remoteStatus" role="status" aria-live="polite"></p>

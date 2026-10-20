@@ -44,8 +44,8 @@ body{
   flex-direction:column;
   gap:6px;
   padding:22px 16px 18px;
-  background:#fff;
-  border-right:1px solid var(--line);
+  background:var(--green-dark);
+  border-right:none;
   z-index:6;
 }
 .side-brand{ display:block; padding:2px 6px 20px; }
@@ -62,7 +62,7 @@ body{
   border:none;
   border-radius:11px;
   background:transparent;
-  color:#41605b;
+  color:rgba(255,255,255,0.86);
   font:inherit;
   font-size:14px;
   font-weight:700;
@@ -74,21 +74,21 @@ body{
   fill:none; stroke:currentColor;
   stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round;
 }
-.nav-btn:hover{ background:#eef6f4; }
-.nav-btn.active{ background:var(--green-soft); color:var(--green-ink); }
-.nav-btn:focus-visible{ outline:2px solid var(--green); outline-offset:1px; }
+.nav-btn:hover{ background:rgba(255,255,255,0.08); color:#fff; }
+.nav-btn.active{ background:#13907f; color:#fff; }
+.nav-btn:focus-visible{ outline:2px solid #7fe0d1; outline-offset:1px; }
 
 .side-device{
   display:flex;
   align-items:center;
   gap:10px;
   padding:12px 14px;
-  border:1px solid var(--line);
+  border:1px solid rgba(255,255,255,0.22);
   border-radius:12px;
-  background:#f6faf9;
+  background:rgba(255,255,255,0.04);
 }
-.side-device-title{ margin:0; font-size:12.5px; font-weight:800; }
-.side-device-sub{ margin:1px 0 0; font-size:11px; font-weight:600; color:var(--muted); }
+.side-device-title{ margin:0; font-size:12.5px; font-weight:800; color:#fff; }
+.side-device-sub{ margin:1px 0 0; font-size:11px; font-weight:600; color:rgba(255,255,255,0.68); }
 
 .status-dot{
   width:9px; height:9px; flex:none;
@@ -289,8 +289,8 @@ body{
     gap:0;
     padding:6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
     border-right:none;
-    border-top:1px solid var(--line);
-    box-shadow:0 -6px 20px rgba(11,61,58,0.06);
+    border-top:none;
+    box-shadow:0 -6px 20px rgba(11,61,58,0.18);
     z-index:30;
   }
   .side-brand, .side-device{ display:none; }
@@ -763,3 +763,10 @@ body{
 .settings-msg.bad{ color:var(--err); }
 
 .settings-msg:empty{ display:none; }
+
+/* "User Manual" nav item: full label in the sidebar, short label in the mobile bottom bar */
+.nav-btn .lbl-short{ display:none; }
+@media (max-width:860px){
+  .nav-btn .lbl-full{ display:none; }
+  .nav-btn .lbl-short{ display:inline; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+}

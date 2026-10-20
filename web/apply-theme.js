@@ -10,27 +10,29 @@ const fs = require("fs");
 
 // live.html is left alone: in this project it only redirects to monitor.html
 const PAGES = ["home.html", "monitor.html", "history.html", "profile.html"];
-const TITLES = { "home.html": "Home", "monitor.html": "Monitor", "history.html": "History", "profile.html": "Profile", "settings.html": "Settings" };
+const TITLES = { "home.html": "Home", "monitor.html": "Monitor", "history.html": "History", "profile.html": "Profile", "manual.html": "User Manual", "settings.html": "Settings" };
 
 const NAV = [
   ["home.html", "Home", '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>'],
   ["monitor.html", "Monitor", '<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>'],
   ["history.html", "History", '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'],
-  ["profile.html", "Profile", '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/>']
+  ["profile.html", "Profile", '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/>'],
+  ["manual.html", "User Manual", '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>']
 ];
 const SETTINGS_ICON = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
 const LOGO = "images/ozara-logo.png";
+const LOGO_WHITE = "images/ozara-logo-white.png";   // sidebar is dark green
 
 function navLink(href, label, icon, active) {
   return `    <a class="nav-btn${active ? " active" : ""}" href="${href}"${active ? ' aria-current="page"' : ""}>
       <svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>
-      <span>${label}</span>
+      ${label === "User Manual" ? '<span class="lbl-full">User Manual</span><span class="lbl-short">Manual</span>' : `<span>${label}</span>`}
     </a>`;
 }
 
 function sidebar(page) {
   return `<nav class="sidebar" aria-label="Main navigation">
-  <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="${LOGO}" alt="Ozara"></a>
+  <a class="side-brand" href="home.html" aria-label="Ozara home"><img src="${LOGO_WHITE}" alt="Ozara"></a>
   <div class="side-nav">
 ${NAV.map(([href, label, icon]) => navLink(href, label, icon, href === page)).join("\n")}
   </div>

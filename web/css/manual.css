@@ -1,0 +1,82 @@
+/* css/manual.css — User Manual page. Uses tokens from dashboard.css */
+
+/* top bar heading with subtitle */
+.top-heading{ display:flex; flex-direction:column; min-width:0; }
+.top-heading .top-title{ font-size:22px; }
+.top-sub{ margin:2px 0 0; font-size:13px; font-weight:500; color:var(--muted); }
+
+/* header card */
+.manual-head{
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; gap:22px; flex-wrap:wrap;
+  padding:20px 24px;
+}
+.manual-wave{ position:absolute; right:0; bottom:0; width:60%; height:100%; pointer-events:none; }
+.manual-head > *:not(.manual-wave){ position:relative; z-index:1; }
+.manual-head-icon{
+  flex:none; width:88px; height:88px; border-radius:50%;
+  display:grid; place-items:center; background:var(--green-soft);
+}
+.manual-head-icon svg{ width:44px; height:44px; fill:none; stroke:var(--green-dark); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.manual-head-text{ flex:1; min-width:220px; }
+.manual-head-title{ margin:0; font-size:20px; font-weight:800; color:var(--ink); }
+.manual-head-sub{ margin:4px 0 0; font-size:15px; font-weight:600; color:var(--green-ink); }
+.manual-head-meta{ margin:8px 0 0; display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12.5px; font-weight:600; color:var(--muted); }
+.manual-head-meta i{ width:4px; height:4px; border-radius:50%; background:#9bb3ae; }
+
+.manual-actions{ flex:none; display:flex; flex-direction:column; gap:10px; width:200px; }
+.manual-btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  padding:11px 16px; border:1.5px solid var(--green-ink); border-radius:10px;
+  background:#fff; color:var(--green-ink);
+  font:inherit; font-size:13.5px; font-weight:800; text-decoration:none; cursor:pointer;
+}
+.manual-btn svg{ width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.manual-btn:hover{ background:var(--green-soft); }
+.manual-btn.primary{ background:var(--green-ink); color:#fff; }
+.manual-btn.primary:hover{ background:var(--green-dark); border-color:var(--green-dark); }
+.manual-btn:focus-visible{ outline:2px solid var(--green); outline-offset:2px; }
+
+/* safety note */
+.manual-warning{
+  display:flex; align-items:center; gap:16px;
+  padding:16px 20px; border:1px solid #cfe8e2; border-radius:14px; background:#e9f6f3;
+  color:var(--ink); font-size:13.5px; font-weight:500; line-height:1.5;
+}
+.manual-warning p{ margin:0; }
+.manual-warning-icon{ flex:none; display:grid; place-items:center; width:34px; height:34px; }
+.manual-warning-icon svg{ width:30px; height:30px; fill:none; stroke:var(--green-dark); stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.manual-warning-title{ margin-bottom:2px !important; font-size:16px; font-weight:800; }
+
+/* jump-to chips */
+.manual-chips{ display:flex; flex-wrap:wrap; gap:10px; padding:14px 16px; }
+.manual-chip{
+  display:inline-flex; align-items:center; gap:9px;
+  padding:9px 16px; border:1px solid #dbe9e5; border-radius:999px;
+  background:#f6faf9; color:var(--ink);
+  font-size:13px; font-weight:700; text-decoration:none;
+}
+.manual-chip svg{ width:17px; height:17px; flex:none; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.manual-chip:hover{ border-color:var(--green); background:var(--green-soft); }
+.manual-chip.active{ background:var(--green-ink); border-color:var(--green-ink); color:#fff; }
+.manual-chip:focus-visible{ outline:2px solid var(--green); outline-offset:2px; }
+
+/* PDF viewer */
+.manual-frame{
+  display:block; width:100%; height:calc(100vh - 140px); min-height:600px;
+  border:none; border-radius:14px; background:#323639;
+  box-shadow:0 1px 2px rgba(11,61,58,0.08);
+}
+.manual-mobile-note{ display:none; margin:0; font-size:13px; font-weight:500; color:var(--muted); line-height:1.5; }
+
+@media (max-width:860px){
+  .top-heading{ display:none; }
+  .manual-head{ padding:18px; gap:16px; }
+  .manual-head-icon{ width:68px; height:68px; }
+  .manual-head-icon svg{ width:34px; height:34px; }
+  .manual-actions{ width:100%; flex-direction:row; }
+  .manual-btn{ flex:1; padding:11px 8px; }
+  .manual-wave{ width:100%; }
+  .manual-frame{ display:none; }
+  .manual-mobile-note{ display:block; }
+}

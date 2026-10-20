@@ -27,13 +27,6 @@ const els = {
   sub: $("liveSub"),
   icon: $("liveIcon"),
   pill: $("livePill"),
-  // Session card
-  sessionTitle: $("sessionTitle"),
-  sessionSub: $("sessionSub"),
-  sessionBadge: $("sessionBadge"),
-  sessionProgress: $("sessionProgress"),
-  sessionProgressBar: $("sessionProgressBar"),
-  goHomeLink: $("goHomeLink"),
   // Sensor readings
   bme: $("bmeValue"),
   mq136: $("mq136Value"),
@@ -157,9 +150,6 @@ function renderLive() {
   els.icon.textContent = icon;
   els.pill.textContent = pill;
 
-  // Session Card
-  renderSessionCard(online);
-
   // Sensor reading values
   els.mq136.textContent = valid && typeof live.mq136 === "number" ? live.mq136 : "—";
   els.mq137.textContent = valid && typeof live.mq137 === "number" ? live.mq137 : "—";
@@ -182,48 +172,6 @@ function renderLive() {
 
   // System & Safety Alerts
   renderAlerts(online, valid);
-}
-
-function renderSessionCard(online) {
-  if (!online || !live) {
-    els.sessionTitle.textContent = "Cabinet status";
-    els.sessionSub.textContent = "Waiting for real-time telemetry from unit.";
-    els.sessionBadge.textContent = "Offline";
-    els.sessionBadge.className = "session-badge";
-    els.sessionProgress.hidden = true;
-    return;
-  }
-
-  const phase = live.phase || "";
-  const remaining = typeof live.remaining === "number" ? live.remaining : -1;
-  const isRunning = phase.includes("RUNNING") || phase.includes("PURGING") || phase === "START_COUNTDOWN";
-
-  if (isRunning) {
-    els.sessionTitle.textContent = phaseLabel(phase);
-    els.sessionSub.textContent = remaining >= 0 ? `${formatClock(remaining)} remaining` : "Cycle in progress";
-    els.sessionBadge.textContent = "Active";
-    els.sessionBadge.className = "session-badge ok";
-
-    if (remaining >= 0 && typeof live.selectedSeconds === "number" && live.selectedSeconds > 0) {
-      const pct = Math.max(0, Math.min(100, Math.round(((live.selectedSeconds - remaining) / live.selectedSeconds) * 100)));
-      els.sessionProgress.hidden = false;
-      els.sessionProgressBar.style.width = `${pct}%`;
-    } else {
-      els.sessionProgress.hidden = true;
-    }
-  } else if (phase === "CYCLE_COMPLETE") {
-    els.sessionTitle.textContent = "Cycle complete";
-    els.sessionSub.textContent = "Sanitization finished. Chamber is safe to open.";
-    els.sessionBadge.textContent = "Completed";
-    els.sessionBadge.className = "session-badge ok";
-    els.sessionProgress.hidden = true;
-  } else {
-    els.sessionTitle.textContent = "Cabinet idle";
-    els.sessionSub.textContent = "Monitoring chamber air. Ready for check or sanitization cycle.";
-    els.sessionBadge.textContent = "Idle";
-    els.sessionBadge.className = "session-badge";
-    els.sessionProgress.hidden = true;
-  }
 }
 
 function renderAlerts(online, valid) {
