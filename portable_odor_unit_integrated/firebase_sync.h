@@ -31,7 +31,7 @@ const char* FB_DEVICE_EMAIL    = "device1@ozara.local";    // must match databas
 const char* FB_DEVICE_PASSWORD = "Admin@123"; // no quotes or backslashes
 const unsigned long FB_LIVE_MS    = 5000UL;   // live + status
 const unsigned long FB_READING_MS = 10000UL;  // history/chart point
-const unsigned long FB_POLL_MS    = 1000UL;   // remote button commands
+const unsigned long FB_POLL_MS    = 300UL;    // remote button commands (was 1000: shorter = faster web buttons, more requests)
 
 String fbIdToken, fbRefreshToken;
 unsigned long fbTokenExpiresAt = 0;   // millis() when the id token should be renewed
@@ -254,7 +254,7 @@ void firebaseTask(void*) {
   unsigned long lastLive = 0, lastReading = 0, lastReadingAtSent = 0, lastPoll = 0;
   bool first = true;
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(25));   // was 100: finer checking so the 300 ms poll really runs every ~300 ms
     if (WiFi.status() != WL_CONNECTED) continue;
     bool liveDue = first || millis() - lastLive >= FB_LIVE_MS;
     bool pollDue = !rcReq.pending && !rcRes.pending && millis() - lastPoll >= FB_POLL_MS;
