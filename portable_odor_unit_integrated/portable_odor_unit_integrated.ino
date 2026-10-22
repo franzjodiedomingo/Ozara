@@ -109,6 +109,24 @@ const char* sensorErrorText = "Check the BME680";
 bool ozoneIsOn = false, completionAlarmAcknowledged = false;
 bool cycleAborted = false, readyAnnouncement = false;
 
+// ---- Finished-cycle history (uploaded to Firebase devices/<id>/history) ----
+// Temp/humidity sums for the current sampling window, and the "after" (clothes)
+// window results kept until the cycle finishes.
+float sampleTempSum = 0, sampleHumSum = 0;
+float clothesTempAvg = 0, clothesHumAvg = 0;
+unsigned int clothesCount = 0;
+struct HistRec {
+  float bme, mq136, mq137, temp, hum;          // "after" (clothes) averages
+  float baseBme, baseMq136, baseMq137;         // "before" (empty cabinet) averages
+  unsigned int count;
+  unsigned long durationS, treatmentS;
+  bool aborted, manual, hasAvg;
+};
+const uint8_t HIST_QUEUE = 4;
+HistRec histQueue[HIST_QUEUE];
+// Single producer (loop, core 1) / single consumer (firebaseTask, core 0).
+volatile uint8_t histHead = 0, histTail = 0;
+
 const int BUTTON_PINS[3] = {BTN_START, BTN_MINUS, BTN_PLUS};
 const char* BUTTON_NAMES[3] = {"OK", "-", "+"};
 bool rawButton[3] = {HIGH,HIGH,HIGH}, stableButton[3] = {HIGH,HIGH,HIGH};
@@ -275,6 +293,25 @@ int sectionProgressWidth() {
 void beginSection(unsigned long duration) {
   sectionStartedAt = millis(); sectionDurationMs = duration; abortProgress = false;
 }
+// Snapshot the finished cycle so the Firebase task can upload it whenever Wi-Fi
+// allows. Called once per cycle, on entering DONE (normal end and abort both land there).
+void queueHistoryRecord() {
+  uint8_t next = (histHead + 1) % HIST_QUEUE;
+  if (next == histTail) { Serial.println("HISTORY: queue full, record dropped"); return; }
+  HistRec& r = histQueue[histHead];
+  r.manual   = manualOzoneCycle;
+  r.aborted  = cycleAborted;
+  r.hasAvg   = !manualOzoneCycle && clothesCount > 0;
+  r.count    = r.hasAvg ? clothesCount : 0;
+  r.bme = clothes[0]; r.mq136 = clothes[1]; r.mq137 = clothes[2];
+  r.temp = clothesTempAvg; r.hum = clothesHumAvg;
+  r.baseBme = baseline[0]; r.baseMq136 = baseline[1]; r.baseMq137 = baseline[2];
+  r.durationS  = finishedCycleMs / 1000UL;
+  r.treatmentS = actualTreatmentMs / 1000UL;
+  __sync_synchronize();          // finish writing the record before publishing it
+  histHead = next;
+  Serial.println("HISTORY: cycle record queued");
+}
 // Entry actions happen once. Drawing never changes outputs or schedules sounds.
 void enterState(State next, bool announce = true) {
   state = next; phaseStartTime = millis(); lastCueSecond = -1;
@@ -294,6 +331,8 @@ void enterState(State next, bool announce = true) {
     case BASELINE_SAMPLING: case CLOTHES_SAMPLING:
       sampleSums[0] = sampleSums[1] = sampleSums[2] = 0;
       sampleCount = 0; lastSampleTime = millis() - SAMPLE_INTERVAL_MS;
+      sampleTempSum = sampleHumSum = 0;
+      if (next == BASELINE_SAMPLING) clothesCount = 0;   // new cycle: forget the old "after" result
       break;
     case WAIT_FOR_CLOTHES: case TIME_CHOICE:
       relayOff(SENSOR_FAN_PIN);
@@ -320,6 +359,7 @@ void enterState(State next, bool announce = true) {
       break;
     case DONE:
       finishedCycleMs=millis()-sectionStartedAt;resultsPage=0;
+      queueHistoryRecord();
       allOutputsOff(); completionAlarmAcknowledged = false;
       completionReminder = true; birthdayStarted = false;
       Serial.println("ACTION: Completion alarm started"); break;
@@ -393,7 +433,8 @@ void serviceSensorReading() {
 
   if (millis() - phaseStartTime >= SAMPLE_WINDOW_MS) return;
   sampleSums[0] += liveGasKOhm;
-  sampleSums[1] += liveMQ136;sampleSums[2] += liveMQ137;sampleCount++;
+  sampleSums[1] += liveMQ136;sampleSums[2] += liveMQ137;
+  sampleTempSum += liveTemperatureC; sampleHumSum += liveHumidityRH; sampleCount++;
 }
 // Display-only conversions outside sampling never contribute to scoring.
 void updateLiveReadings() {
@@ -662,6 +703,7 @@ void updateCycle() {
           if(isBaseline) baseline[i]=sampleSums[i]/sampleCount;
           else clothes[i]=sampleSums[i]/sampleCount;
         }
+        if(!isBaseline) {clothesTempAvg=sampleTempSum/sampleCount; clothesHumAvg=sampleHumSum/sampleCount; clothesCount=sampleCount;}
         if(isBaseline) enterState(WAIT_FOR_CLOTHES);
         else {calculateSuggestion();enterState(TIME_CHOICE);}
       } else doSampling();

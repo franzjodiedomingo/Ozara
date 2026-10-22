@@ -16,6 +16,7 @@
 //   live      overwritten every FB_LIVE_MS      -> Live page
 //   status    overwritten every FB_LIVE_MS      -> Home page (ready, sensors, cycle)
 //   readings  one new child every FB_READING_MS -> Live chart and recent readings
+//   history   one new child per finished cycle  -> History page + Monitor "Completed cycles"
 //
 // The unit signs in to Firebase Auth with its own account (FB_DEVICE_EMAIL).
 // Create that user in Firebase Console > Authentication > Users first, and keep
@@ -31,9 +32,22 @@ const char* FB_DEVICE_EMAIL    = "device1@ozara.local";    // must match databas
 const char* FB_DEVICE_PASSWORD = "Admin@123"; // no quotes or backslashes
 const unsigned long FB_LIVE_MS    = 5000UL;   // live + status
 const unsigned long FB_READING_MS = 10000UL;  // history/chart point
-const unsigned long FB_POLL_MS    = 300UL;    // remote button commands (was 1000: shorter = faster web buttons, more requests)
+const unsigned long FB_POLL_MS    = 300UL;    // FALLBACK only: used while the instant stream below is down
 
 String fbIdToken, fbRefreshToken;
+SemaphoreHandle_t fbTokenLock = nullptr;   // token is read by the stream task, written by the live task
+volatile bool fbStreamUp = false;          // true while the instant-command stream is connected
+void fbSetToken(const String& t) {
+  if (fbTokenLock) xSemaphoreTake(fbTokenLock, portMAX_DELAY);
+  fbIdToken = t;
+  if (fbTokenLock) xSemaphoreGive(fbTokenLock);
+}
+String fbGetToken() {
+  if (fbTokenLock) xSemaphoreTake(fbTokenLock, portMAX_DELAY);
+  String t = fbIdToken;
+  if (fbTokenLock) xSemaphoreGive(fbTokenLock);
+  return t;
+}
 unsigned long fbTokenExpiresAt = 0;   // millis() when the id token should be renewed
 int lastFirebaseCode = 0;
 int fbAuthFails = 0;
@@ -100,7 +114,7 @@ bool fbSignIn() {
     Serial.print(" "); Serial.println(fbJsonString(resp, "message")); // e.g. INVALID_LOGIN_CREDENTIALS
     return false;
   }
-  fbIdToken = fbJsonString(resp, "idToken");
+  fbSetToken(fbJsonString(resp, "idToken"));
   fbRefreshToken = fbJsonString(resp, "refreshToken");
   long expires = fbJsonString(resp, "expiresIn").toInt();
   if (expires <= 600) expires = 3600;
@@ -117,7 +131,7 @@ bool fbRefresh() {
   if (code != 200) return false;
   String id = fbJsonString(resp, "id_token");
   if (id.length() == 0) return false;
-  fbIdToken = id;
+  fbSetToken(id);
   String refresh = fbJsonString(resp, "refresh_token");
   if (refresh.length()) fbRefreshToken = refresh;
   long expires = fbJsonString(resp, "expires_in").toInt();
@@ -207,13 +221,38 @@ String fbBuildReading() {
   return b;
 }
 
+// One finished-cycle summary (see queueHistoryRecord() in the .ino).
+// endedAt is the server clock when the record arrives; the web app derives
+// startedAt = endedAt - durationSec because the ESP32 has no real-time clock.
+String fbBuildHistory(const HistRec& r) {
+  String b = "{";
+  b += "\"phase\":\"" + String(r.manual ? "manual" : "cycle") + "\"";
+  b += ",\"status\":\"" + String(r.aborted ? "aborted" : "completed") + "\"";
+  b += ",\"endedAt\":{\".sv\":\"timestamp\"}";
+  b += ",\"durationSec\":" + String(r.durationS);
+  b += ",\"treatmentSec\":" + String(r.treatmentS);
+  b += ",\"count\":" + String(r.count);
+  if (r.hasAvg) {
+    b += ",\"bmeAvg\":" + String(r.bme, 3);            // kOhm, BME680 gas resistance
+    b += ",\"mq136Avg\":" + String(r.mq136, 1);        // raw ADC
+    b += ",\"mq137Avg\":" + String(r.mq137, 1);        // raw ADC
+    b += ",\"temperatureAvg\":" + String(r.temp, 2);
+    b += ",\"humidityAvg\":" + String(r.hum, 2);
+    b += ",\"baselineBmeAvg\":" + String(r.baseBme, 3);
+    b += ",\"baselineMq136Avg\":" + String(r.baseMq136, 1);
+    b += ",\"baselineMq137Avg\":" + String(r.baseMq137, 1);
+  }
+  b += "}";
+  return b;
+}
+
 void fbHandleCode(int code, const char* what) {
   lastFirebaseCode = code;
   Serial.print("FIREBASE: "); Serial.print(what); Serial.print(" HTTP "); Serial.println(code);
   if (code == 200 || code == 204) { fbAuthFails = 0; return; }
   if (code == 401 && ++fbAuthFails >= 3) {   // token rejected or rules denied
     Serial.println("FIREBASE: permission denied. Check device email and database rules.");
-    fbIdToken = "";                           // force a fresh sign-in
+    fbSetToken("");                           // force a fresh sign-in
     fbAuthFails = 0;
   }
 }
@@ -250,15 +289,72 @@ void fbParseCommand(const String& resp) {
   rcSubmit(key, act, id);
 }
 
+
+// ---------- Instant remote buttons (Firebase streaming) ----------
+// Instead of asking Firebase "anything new?" every 300 ms, this task keeps one
+// connection open (Server-Sent Events). Firebase PUSHES the command the moment
+// the web app writes it, so there is no polling delay and the 5 s live update
+// in firebaseTask() can no longer hold a button press back.
+// If the stream drops, firebaseTask() falls back to the 300 ms poll automatically.
+void fbStreamTask(void*) {
+  WiFiClientSecure client;
+  String usedToken = "";
+  for (;;) {
+    String token = fbGetToken();
+    if (WiFi.status() != WL_CONNECTED || token.length() == 0) { fbStreamUp = false; vTaskDelay(pdMS_TO_TICKS(500)); continue; }
+
+    String host = String(FB_DB_URL); host.replace("https://", "");
+    String path = String("/devices/") + FB_DEVICE_ID + "/commands/button.json?auth=" + token;
+    client.setInsecure();
+    client.setNoDelay(true);
+    if (!client.connect(host.c_str(), 443, 5000)) { fbStreamUp = false; client.stop(); vTaskDelay(pdMS_TO_TICKS(1500)); continue; }
+    // HTTP/1.0 on purpose: the server then streams the events without chunk framing.
+    client.print(String("GET ") + path + " HTTP/1.0\r\nHost: " + host + "\r\nAccept: text/event-stream\r\n\r\n");
+
+    usedToken = token;
+    bool headersDone = false, ok = false;
+    String line, evt;
+    unsigned long lastData = millis();
+    while (client.connected() || client.available()) {
+      if (fbGetToken() != usedToken) break;                 // token renewed: reconnect with the new one
+      if (millis() - lastData > 70000UL) break;             // Firebase sends a keep-alive about every 30 s
+      if (!client.available()) { vTaskDelay(pdMS_TO_TICKS(2)); continue; }
+      char c = client.read();
+      lastData = millis();
+      if (c == '\r') continue;
+      if (c != '\n') { if (line.length() < 600) line += c; continue; }
+
+      if (!headersDone) {                                   // status line + headers
+        if (line.startsWith("HTTP/")) ok = line.indexOf(" 200") > 0;
+        if (line.length() == 0) { headersDone = true; if (!ok) break; fbStreamUp = true; Serial.println("FIREBASE: command stream connected"); }
+      } else if (line.startsWith("event:")) {
+        evt = line.substring(6); evt.trim();
+        if (evt == "auth_revoked" || evt == "cancel") break;
+      } else if (line.startsWith("data:")) {
+        if (evt == "put" && line.indexOf("\"path\":\"/\"") > 0) {
+          if (line.indexOf("\"data\":null") > 0) fbParseCommand("null");   // empty node: just mark as primed
+          else fbParseCommand(line.substring(5));
+        }
+      }
+      line = "";
+    }
+    fbStreamUp = false;
+    client.stop();
+    Serial.println("FIREBASE: command stream closed, reconnecting");
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
+
 void firebaseTask(void*) {
-  unsigned long lastLive = 0, lastReading = 0, lastReadingAtSent = 0, lastPoll = 0;
+  unsigned long lastLive = 0, lastReading = 0, lastReadingAtSent = 0, lastPoll = 0, lastHistTry = 0;
   bool first = true;
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(25));   // was 100: finer checking so the 300 ms poll really runs every ~300 ms
+    vTaskDelay(pdMS_TO_TICKS(10));   // fine checking so acks go out right away
     if (WiFi.status() != WL_CONNECTED) continue;
     bool liveDue = first || millis() - lastLive >= FB_LIVE_MS;
-    bool pollDue = !rcReq.pending && !rcRes.pending && millis() - lastPoll >= FB_POLL_MS;
-    if (!liveDue && !pollDue && !rcRes.pending) continue;
+    bool pollDue = !fbStreamUp && !rcReq.pending && !rcRes.pending && millis() - lastPoll >= FB_POLL_MS;
+    bool histDue = histHead != histTail && millis() - lastHistTry >= 5000UL;   // retry every 5 s until sent
+    if (!liveDue && !pollDue && !rcRes.pending && !histDue) continue;
     if (!fbEnsureToken()) { vTaskDelay(pdMS_TO_TICKS(10000)); continue; }
 
     String base = String(FB_DB_URL) + "/devices/" + FB_DEVICE_ID;
@@ -278,6 +374,13 @@ void firebaseTask(void*) {
       int code = fbRequest("GET", base + "/commands/button.json" + authQ, "", "application/json", &resp);
       if (code == 200) fbParseCommand(resp);
       else fbHandleCode(code, "command poll");
+    }
+    if (histDue) {
+      lastHistTry = millis();
+      HistRec rec = histQueue[histTail];                 // copy; only drop it once Firebase accepted it
+      int code = fbRequest("POST", base + "/history.json" + authQ, fbBuildHistory(rec), "application/json");
+      fbHandleCode(code, "history");
+      if (code == 200) { __sync_synchronize(); histTail = (histTail + 1) % HIST_QUEUE; }
     }
     if (liveDue) {
       first = false;
@@ -301,5 +404,7 @@ void pushToFirebase() {
   static bool started = false;
   if (started) return;
   started = true;
+  fbTokenLock = xSemaphoreCreateMutex();
   xTaskCreatePinnedToCore(firebaseTask, "firebase", 16384, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(fbStreamTask, "fbstream", 10240, nullptr, 1, nullptr, 0);
 }

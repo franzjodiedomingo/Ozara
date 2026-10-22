@@ -17,7 +17,7 @@
 // hold    held until a "release" request arrives. RC_HOLD_MAX_MS is a safety:
 //         if the release is lost (browser closed, Wi-Fi drop) it lets go by itself.
 
-const unsigned long RC_TAP_MS = 180;
+const unsigned long RC_TAP_MS = 90;    // must stay above DEBOUNCE_MS (50) so the press registers
 const unsigned long RC_HOLD_MAX_MS = 8000;
 const char* const RC_OWNER = "cloud";
 enum { RC_TAP = 0, RC_HOLD = 1, RC_RELEASE = 2 };
