@@ -2,7 +2,8 @@
 // Common auth guard + sign-out wiring used by every dashboard page
 // (home.html, monitor.html, history.html, profile.html, settings.html).
 
-import { auth } from "../firebase-config.js";
+import { auth, db } from "../firebase-config.js";
+import { ref, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import {
   onAuthStateChanged,
   signOut
@@ -50,6 +51,26 @@ const DIALOG_HTML = `
   </div>`;
 
 let dialogOpen = false;
+
+// On sign-out the Monitor page starts fresh next time: it only shows readings and
+// completed cycles recorded AFTER this moment. Nothing is deleted. The History page
+// never looks at this value, so every past cycle stays there.
+// Never blocks sign-out: if Firebase is unreachable we keep a local fallback instead.
+export async function markMonitorReset() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const localKey = `ozara_monitor_reset_${user.uid}`;
+  try {
+    await Promise.race([
+      set(ref(db, `users/${user.uid}/monitorResetAt`), serverTimestamp()),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 2500))
+    ]);
+    try { localStorage.removeItem(localKey); } catch { /* storage blocked */ }
+  } catch (err) {
+    console.warn("Monitor reset not saved to Firebase, using local fallback", err);
+    try { localStorage.setItem(localKey, String(Date.now())); } catch { /* storage blocked */ }
+  }
+}
 
 function openSignOutDialog() {
   if (dialogOpen) return;
@@ -111,6 +132,7 @@ function openSignOutDialog() {
     message.hidden = true;
     label.textContent = "Signing out…";
     try {
+      await markMonitorReset();   // Monitor starts fresh next login; History is untouched
       await signOut(auth);
       window.location.href = "login.html";
     } catch (err) {

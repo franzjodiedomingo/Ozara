@@ -19,7 +19,7 @@ import { createPresence } from "./presence.js";
 
 const DEVICE_ID = "device1";
 const HOLD_START_MS = 400;     // pressed longer than this counts as a hold
-const ACK_TIMEOUT_MS = 4000;   // how long a tap blocks other presses while waiting for the unit
+const ACK_TIMEOUT_MS = 350;    // short lock so a press can finish on the unit; we no longer wait for the ack
 
 // holdMs matches CANCEL_HOLD_MS / START_CONFIRM_MS in the firmware (progress bar only).
 const BUTTONS = {
@@ -185,7 +185,7 @@ function init() {
     onValue(ref(db, `devices/${DEVICE_ID}/commands/buttonAck`), (snap) => {
       const ack = snap.exists() ? snap.val() : null;
       if (!ack || ack.id !== lastId) return;
-      busyUntil = 0;
+      if (!ack.ok) busyUntil = 0;   // rejected: allow an immediate retry
       if (ack.ok) {
         setStatus(lastAction === "release" ? "Released." : "Done. The unit received it.", "ok");
       } else {

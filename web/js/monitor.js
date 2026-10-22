@@ -50,16 +50,28 @@ let live = null;
 let status = null;
 let readings = [];
 let historyList = [];
+let rawReadings = [];   // everything Firebase sent
+let rawHistory = [];
+let resetAt = 0;        // set at sign-out: Monitor hides anything older than this
 let chart = null;
 let lastReadingsKey = "";
 
-requireAuth().then(() => {
+requireAuth().then((user) => {
   const onErr = (error) => {
     els.connDot.style.background = "var(--dot-err)";
     console.error(error);
   };
 
   const base = `devices/${DEVICE_ID}`;
+
+  // 0. Monitor reset point (written at sign-out, see shared.js). Display filter only.
+  let localReset = 0;
+  try { localReset = Number(localStorage.getItem(`ozara_monitor_reset_${user.uid}`)) || 0; } catch { /* blocked */ }
+  resetAt = localReset;
+  onValue(ref(db, `users/${user.uid}/monitorResetAt`), (snap) => {
+    resetAt = Math.max(Number(snap.val()) || 0, localReset);
+    applyReset();
+  }, (error) => console.warn("Monitor reset point unavailable", error));
 
   // 1. Live real-time snapshot
   onValue(ref(db, `${base}/live`), (snap) => {
@@ -80,21 +92,30 @@ requireAuth().then(() => {
   onValue(query(ref(db, `${base}/readings`), limitToLast(CHART_POINTS)), (snap) => {
     const list = [];
     snap.forEach((child) => { list.push(child.val()); });
-    readings = list;
-    renderReadings();
+    rawReadings = list;
+    applyReset();
   }, onErr);
 
   // 4. Completed history records
   onValue(query(ref(db, `${base}/history`), limitToLast(50)), (snap) => {
     const list = [];
     snap.forEach((child) => { list.push(child.val()); });
-    historyList = list;
-    renderHistory();
+    rawHistory = list;
+    applyReset();
   }, onErr);
 
   // Periodic ticker to check presence & count down time accurately
   setInterval(renderLive, 1000);
 });
+
+// Hide what happened before the last sign-out. The data stays in Firebase and on the History page.
+function applyReset() {
+  readings = rawReadings.filter((r) => !resetAt || (Number(r.timestamp) || 0) >= resetAt);
+  historyList = rawHistory.filter((h) => !resetAt || (Number(h.endedAt) || Number(h.startedAt) || 0) >= resetAt);
+  lastReadingsKey = "";   // force a redraw even if the last point looks the same
+  renderReadings();
+  renderHistory();
+}
 
 // ---------- Rendering ----------
 
@@ -192,7 +213,7 @@ function renderAlerts(online, valid) {
   }
 
   if (alerts.length === 0) {
-    els.alertList.innerHTML = `<p class="log-empty">No active alerts. Chamber operating within safe parameters.</p>`;
+    els.alertList.innerHTML = `<p class="log-empty">No active alerts. Operating within safe parameters.</p>`;
   } else {
     els.alertList.innerHTML = alerts.map((msg) => `
       <div class="log-row" style="color:var(--err); font-weight:600;">

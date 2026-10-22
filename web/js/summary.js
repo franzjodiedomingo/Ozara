@@ -14,8 +14,18 @@ export const PHASE_LABEL = {
   RUNNING_PULSE: "Ozone pulse",
   RUNNING_DISPERSE: "Ozone disperse",
   PURGING: "Carbon purge",
-  CYCLE_COMPLETE: "Cycle complete"
+  CYCLE_COMPLETE: "Cycle complete",
+  cycle: "Odor treatment cycle",
+  manual: "Manual ozone test"
 };
+
+// The ESP32 has no clock, so finished-cycle records carry endedAt (server time).
+// Start time = end time minus the cycle length. Older records that already have startedAt are untouched.
+export function startedAtOf(h) {
+  const s = Number(h.startedAt) || 0;
+  if (s) return s;
+  return h.endedAt ? Number(h.endedAt) - (Number(h.durationSec) || 0) * 1000 : 0;
+}
 
 export function formatNumber(n, decimals = 2) {
   return typeof n === "number" ? n.toFixed(decimals) : "—";
@@ -35,7 +45,7 @@ export function formatDuration(sec) {
 export function numberRuns(list) {
   return list
     .slice()
-    .sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0))
+    .sort((a, b) => startedAtOf(a) - startedAtOf(b))
     .map((run, i) => ({ run, no: i + 1 }));
 }
 
@@ -51,7 +61,9 @@ export function summaryHtml(h, no) {
   if (isCheck) {
     badge = peakHigh ? `<span class="summary-badge warn">Ozone elevated</span>` : `<span class="summary-badge">Air normal</span>`;
   } else if (!hasEnd) {
-    badge = `<span class="summary-badge">Completed</span>`;
+    badge = h.status === "aborted"
+      ? `<span class="summary-badge warn">Aborted</span>`
+      : `<span class="summary-badge">Completed</span>`;
   } else {
     badge = endSafe ? `<span class="summary-badge">Reached safe level</span>` : `<span class="summary-badge warn">Still above limit</span>`;
   }
@@ -79,7 +91,7 @@ export function summaryHtml(h, no) {
       </div>
       ${badge}
     </div>
-    <p class="run-meta">${formatDateTime(h.startedAt)} · ${formatDuration(h.durationSec)} · ${h.count || 0} readings${dropped}</p>
+    <p class="run-meta">${formatDateTime(startedAtOf(h))} · ${formatDuration(h.durationSec)} · ${h.count || 0} readings${dropped}</p>
     <div class="run-stats">
       ${tiles}
       <div class="run-stat"><span>Humidity avg</span><b>${formatNumber(h.humidityAvg, 0)}<small>%</small></b></div>

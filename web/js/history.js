@@ -17,7 +17,7 @@ import { requireAuth } from "./shared.js";
 import { db } from "../firebase-config.js";
 import { ref, query, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 import { createPresence } from "./presence.js";
-import { OZONE_SAFE_LIMIT_PPM, formatNumber, formatDuration } from "./summary.js";
+import { OZONE_SAFE_LIMIT_PPM, formatNumber, formatDuration, startedAtOf } from "./summary.js";
 
 const DEVICE_ID = "device1";
 const PAGE_SIZE = 10;
@@ -104,10 +104,10 @@ function statusLabel(r) {
 
 // Oldest first so the per-day counter (-001, -002 …) follows real order.
 function normalize(list) {
-  const sorted = list.slice().sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+  const sorted = list.slice().sort((a, b) => startedAtOf(a) - startedAtOf(b));
   const perDay = {};
   return sorted.map((h) => {
-    const startedAt = Number(h.startedAt) || 0;
+    const startedAt = startedAtOf(h);
     let id = h.cycleId;
     if (!id) {
       if (startedAt) {
